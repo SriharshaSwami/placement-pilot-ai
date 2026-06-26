@@ -7,9 +7,11 @@ import { validateSchema } from '../ai/validators/schema.validator.js';
 import { buildQuestionPrompt } from '../ai/prompts/interview/question.prompt.js';
 import { buildEvaluationPrompt } from '../ai/prompts/interview/evaluation.prompt.js';
 import { buildSummaryPrompt } from '../ai/prompts/interview/summary.prompt.js';
+import { buildLiveSessionPrompt } from '../ai/prompts/interview/live.prompt.js';
 import { interviewQuestionSchema } from '../ai/schemas/interviewQuestion.schema.js';
 import { interviewEvaluationSchema } from '../ai/schemas/interviewEvaluation.schema.js';
 import { interviewSummarySchema } from '../ai/schemas/interviewSummary.schema.js';
+import coachingService from './coaching.service.js';
 
 class InterviewService {
   async createSession(userId, configData) {
@@ -59,8 +61,24 @@ class InterviewService {
 
     const parsedResume = session.resumeId?.parsedData || null;
     const parsedJob = session.jobId || null;
+    
+    // Adaptive difficulty logic:
+    // If the candidate scored well on previous answers, bump up the difficulty.
+    // If they struggled, bump it down.
+    let adaptiveConfig = { ...session.config };
+    if (session.questions.length >= 2) {
+      const recentEvals = session.questions.slice(-2).map(q => q.evaluation).filter(Boolean);
+      if (recentEvals.length === 2) {
+        const avgTechScore = (recentEvals[0].technicalAccuracy + recentEvals[1].technicalAccuracy) / 2;
+        if (avgTechScore >= 8) {
+           adaptiveConfig.difficulty = adaptiveConfig.difficulty === 'Easy' ? 'Medium' : 'Hard';
+        } else if (avgTechScore <= 4) {
+           adaptiveConfig.difficulty = adaptiveConfig.difficulty === 'Hard' ? 'Medium' : 'Easy';
+        }
+      }
+    }
 
-    const promptBuilder = buildQuestionPrompt(session.config, parsedResume, parsedJob, session.questions);
+    const promptBuilder = buildQuestionPrompt(adaptiveConfig, parsedResume, parsedJob, session.questions);
     
     const { parsedJSON } = await geminiAdapter.generateStructuredJSON(
       promptBuilder.buildContent(),
@@ -136,10 +154,59 @@ class InterviewService {
 
     validateSchema(parsedJSON, interviewSummarySchema.required);
 
-    return interviewRepository.updateSession(sessionId, {
+    const updatedSession = await interviewRepository.updateSession(sessionId, {
       status: 'Completed',
       summary: parsedJSON
     });
+
+    // Run deep coaching analysis asynchronously (fire-and-forget for now, or await if preferred)
+    coachingService.generateCoachingReport(updatedSession).catch(err => {
+      console.error("[InterviewService] Async coaching generation failed:", err);
+    });
+
+    return updatedSession;
+  }
+
+  async getLiveSessionPrompt(userId, sessionId) {
+    const session = await this.getSession(userId, sessionId);
+    if (session.status !== 'InProgress') {
+      throw new CustomError('Session is not active', 400);
+    }
+    const parsedResume = session.resumeId?.parsedData || null;
+    const parsedJob = session.jobId || null;
+    
+    const promptBuilder = buildLiveSessionPrompt(session.config, parsedResume, parsedJob, session.questions);
+    return promptBuilder.buildContent();
+  }
+
+  async evaluateAndSaveLiveTurn(userId, sessionId, questionText, answerText) {
+    if (!questionText || !answerText) return; // Need both to evaluate
+    const session = await this.getSession(userId, sessionId);
+    if (session.status !== 'InProgress') return;
+
+    try {
+      const parsedJob = session.jobId || null;
+      const promptBuilder = buildEvaluationPrompt(questionText, answerText, session.config, parsedJob);
+      
+      const { parsedJSON } = await geminiAdapter.generateStructuredJSON(
+        promptBuilder.buildContent(),
+        interviewEvaluationSchema,
+        promptBuilder.getSystemInstruction()
+      );
+
+      validateSchema(parsedJSON, interviewEvaluationSchema.required);
+      
+      session.questions.push({
+        sequenceNumber: session.questions.length + 1,
+        questionText,
+        candidateAnswer: answerText,
+        evaluation: parsedJSON,
+      });
+      
+      await interviewRepository.updateSession(sessionId, { questions: session.questions });
+    } catch (err) {
+      console.error("[InterviewService] Failed to evaluate live turn:", err);
+    }
   }
 }
 

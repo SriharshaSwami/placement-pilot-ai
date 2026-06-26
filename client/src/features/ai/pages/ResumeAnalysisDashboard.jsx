@@ -82,15 +82,10 @@ const ResumeAnalysisDashboard = () => {
   return (
     <div className="space-y-8 pb-12">
       <div className="flex items-center space-x-4 mb-2">
-        <Link
-          to={`/resume/${resumeId}`}
-          className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <PageHeader
-          title="AI Resume Analysis"
-          description={`Analysis report for ${resume.title}`}
+        <PageHeader 
+          title="Resume Analysis" 
+          description="Detailed AI analysis of your resume formatting and content."
+          backTo={`/resume/${resumeId}`}
         />
       </div>
 

@@ -9,7 +9,7 @@ import { Play } from 'lucide-react';
 
 export default function InterviewSetup() {
   const navigate = useNavigate();
-  const [config, setConfig] = useState({ type: 'Mixed', difficulty: 'Medium', duration: 10 });
+  const [config, setConfig] = useState({ type: 'Mixed', difficulty: 'Medium', duration: 10, persona: 'Senior Software Engineer' });
   const [resumeId, setResumeId] = useState('');
   const [jobId, setJobId] = useState('');
 
@@ -37,7 +37,7 @@ export default function InterviewSetup() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 pb-12">
-      <PageHeader title="Setup Mock Interview" description="Configure your AI interviewer based on your target role." />
+      <PageHeader title="Setup Mock Interview" description="Configure your AI interviewer based on your target role." backTo="/interview" />
       
       <form onSubmit={handleSubmit} className="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm space-y-6">
         <div>
@@ -107,6 +107,26 @@ export default function InterviewSetup() {
               <option value="10">10 mins</option>
               <option value="20">20 mins</option>
               <option value="30">30 mins</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Interviewer Persona</label>
+            <select
+              value={config.persona}
+              onChange={(e) => setConfig({ ...config, persona: e.target.value })}
+              className="w-full rounded-md border-slate-35 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-white"
+            >
+              <option value="Friendly Campus Recruiter">Friendly Campus Recruiter</option>
+              <option value="Senior Software Engineer">Senior Software Engineer</option>
+              <option value="Google L3 Interviewer">Google L3 Interviewer</option>
+              <option value="Amazon Bar Raiser">Amazon Bar Raiser</option>
+              <option value="Startup CTO">Startup CTO</option>
+              <option value="HR Recruiter">HR Recruiter</option>
+              <option value="Engineering Manager">Engineering Manager</option>
+              <option value="System Design Interviewer">System Design Interviewer</option>
             </select>
           </div>
         </div>

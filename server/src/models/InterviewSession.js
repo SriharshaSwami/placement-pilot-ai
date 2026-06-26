@@ -9,6 +9,8 @@ const evaluationSchema = new mongoose.Schema({
   weaknesses: [String],
   idealAnswer: String,
   improvementSuggestions: [String],
+  criticalMistakes: [String],
+  hiringSignals: [String],
 }, { _id: false });
 
 const interviewQuestionSchema = new mongoose.Schema({
@@ -36,6 +38,11 @@ const interviewSummarySchema = new mongoose.Schema({
   interviewReadiness: String,
   personalizedRecommendations: [String],
   learningRoadmap: [String],
+  criticalMistakes: [String],
+  hiringSignals: [String],
+  redFlags: [String],
+  excellentAnswers: [String],
+  missedOpportunities: [String],
 }, { _id: false });
 
 const interviewSessionSchema = new mongoose.Schema({
@@ -58,6 +65,7 @@ const interviewSessionSchema = new mongoose.Schema({
     type: { type: String, enum: ['HR', 'Technical', 'Behavioral', 'DSA', 'System Design', 'Mixed'], required: true },
     difficulty: { type: String, enum: ['Easy', 'Medium', 'Hard'], required: true },
     duration: { type: Number, required: true }, // in minutes
+    persona: { type: String, default: 'Friendly Campus Recruiter' },
   },
   
   status: { type: String, enum: ['Draft', 'InProgress', 'Completed', 'Archived'], default: 'InProgress' },
@@ -65,6 +73,7 @@ const interviewSessionSchema = new mongoose.Schema({
   questions: [interviewQuestionSchema],
   
   summary: { type: interviewSummarySchema, default: null },
+  coachingReport: { type: mongoose.Schema.Types.Mixed, default: null },
 }, {
   timestamps: true,
 });

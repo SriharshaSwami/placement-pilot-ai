@@ -34,7 +34,11 @@ export default function CodingReport() {
 
   return (
     <div className="space-y-8 pb-12">
-      <PageHeader title="Coding Evaluation Report" description={`Analysis for ${question.title}`} />
+      <PageHeader 
+        title="Coding Assessment Report" 
+        description={`Performance analysis for ${question.title}`}
+        backTo="/coding"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">

@@ -15,11 +15,15 @@ export default function RoadmapDetails() {
   if (isLoading) return <LoadingSkeleton />;
   if (!roadmapRes?.data) return <ErrorState message="No roadmap generated yet." />;
 
-  const { skillGap, resumeImprovements, portfolioSuggestions } = roadmapRes.data;
+  const { roadmap, skillGap, resumeImprovements, portfolioSuggestions } = roadmapRes.data;
 
   return (
     <div className="space-y-8 pb-12">
-      <PageHeader title="Skill Gap Analysis" description="Deep dive into your AI-identified strengths and weaknesses." />
+      <PageHeader 
+        title={roadmap.title}
+        description={`Target Role: ${roadmap.targetRole}`}
+        backTo="/career"
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <AnalysisSection title="Strong Skills" icon={TrendingUp} items={skillGap.strongSkills} />

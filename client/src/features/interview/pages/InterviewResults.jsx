@@ -6,7 +6,12 @@ import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
 import { ErrorState } from '@/components/feedback/ErrorState.jsx';
 import { ATSScoreCard } from '@/features/ai/components/ATSScoreCard.jsx';
 import { AnalysisSection } from '@/features/ai/components/AnalysisSection.jsx';
-import { Star, AlertTriangle, Lightbulb, BookOpen } from 'lucide-react';
+import { Star, AlertTriangle, Lightbulb, BookOpen, ShieldAlert, HeartHandshake, TrendingUp, Loader2 } from 'lucide-react';
+import React, { Suspense, lazy } from 'react';
+
+const RadarChartMetrics = lazy(() => import('../components/RadarChartMetrics.jsx'));
+const AnswerTimeline = lazy(() => import('../components/AnswerTimeline.jsx'));
+const CoachingDashboard = lazy(() => import('../components/CoachingDashboard.jsx'));
 
 export default function InterviewResults() {
   const { id } = useParams();
@@ -20,7 +25,7 @@ export default function InterviewResults() {
   if (!sessionRes?.data) return <ErrorState message="Results not found" />;
 
   const session = sessionRes.data;
-  const { summary } = session;
+  const { summary, questions, coachingReport } = session;
 
   if (session.status !== 'Completed' || !summary) {
     return (
@@ -32,22 +37,32 @@ export default function InterviewResults() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
-      <PageHeader title="Mock Interview Results" description="Detailed analysis of your performance." />
+    <div className="space-y-8 pb-12 max-w-7xl mx-auto">
+      <PageHeader 
+        title="Mock Interview Report" 
+        description={`Detailed AI analysis for your ${session.config?.type} Interview with ${session.config?.persona} (${session.config?.company}).`} 
+        backTo="/interview"
+      />
 
+      {/* Top Metrics Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-8">
           <ATSScoreCard score={summary.overallScore} />
         </div>
-        <div className="lg:col-span-2">
-           <div className="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm h-full">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Performance Summary</h3>
+        
+        <div className="lg:col-span-2 space-y-8">
+           <div className="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm h-full">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Coach's Summary</h3>
             <p className="text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">
               {summary.overallPerformance}
             </p>
-            <div className="mt-6 flex items-center space-x-2">
-              <span className="text-sm font-semibold text-slate-900 dark:text-white">Readiness:</span>
-              <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1 text-sm font-medium text-blue-700 dark:text-blue-400">
+            <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 flex items-center space-x-2">
+              <span className="text-sm font-semibold text-slate-900 dark:text-white">Interview Readiness:</span>
+              <span className={`inline-flex items-center rounded-md px-3 py-1 text-sm font-bold ${
+                summary.interviewReadiness === 'Strong Hire' || summary.interviewReadiness === 'Ready'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+              }`}>
                 {summary.interviewReadiness}
               </span>
             </div>
@@ -55,13 +70,36 @@ export default function InterviewResults() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* Categorized Feedback Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         <AnalysisSection title="Top Strengths" icon={Star} items={summary.topStrengths} />
+        <AnalysisSection title="Hiring Signals" icon={HeartHandshake} items={summary.hiringSignals} />
+        <AnalysisSection title="Excellent Answers" icon={TrendingUp} items={summary.excellentAnswers} />
+        
         <AnalysisSection title="Weakest Areas" icon={AlertTriangle} items={summary.weakestAreas} />
+        <AnalysisSection title="Critical Mistakes" icon={ShieldAlert} items={summary.criticalMistakes} />
+        <AnalysisSection title="Missed Opportunities" icon={Lightbulb} items={summary.missedOpportunities} />
       </div>
 
-      <AnalysisSection title="Topics to Study" icon={BookOpen} items={summary.topicsToStudy} />
-      <AnalysisSection title="Actionable Recommendations" icon={Lightbulb} items={summary.personalizedRecommendations} />
+      <Suspense fallback={<div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
+        <div className="mt-12 mb-8">
+          <RadarChartMetrics summary={summary} />
+        </div>
+
+        {/* Topics and Roadmaps */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <AnalysisSection title="Topics to Study" icon={BookOpen} items={summary.topicsToStudy} />
+          <AnalysisSection title="Learning Roadmap" icon={TrendingUp} items={summary.learningRoadmap} />
+        </div>
+
+        {/* Chronological Timeline */}
+        <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
+          <AnswerTimeline questions={questions} coachingReport={coachingReport} />
+        </div>
+
+        {/* AI Coaching Dashboard */}
+        <CoachingDashboard coachingReport={coachingReport} />
+      </Suspense>
     </div>
   );
 }

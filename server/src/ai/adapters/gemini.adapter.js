@@ -1,44 +1,116 @@
-import { GoogleGenAI } from '@google/genai';
-import CustomError from '../../errors/CustomError.js';
+import crypto from 'crypto';
+import geminiClient from './gemini.client.js';
+import logger from '../../utils/logger.js';
 
-// The SDK automatically picks up GEMINI_API_KEY from process.env
-const ai = new GoogleGenAI({});
-
-class GeminiAdapter {
-  constructor(modelName = 'gemini-2.5-flash') {
-    this.modelName = modelName;
+class AiRequestManager {
+  constructor() {
+    this.modelName = geminiClient.modelName;
+    // Cache: { [hash]: { response, timestamp } }
+    this.cache = new Map();
+    // In-flight Deduplication: { [hash]: Promise }
+    this.inFlightRequests = new Map();
   }
 
-  async generateStructuredJSON(promptText, schema, systemInstruction = null) {
-    try {
-      const config = {
-        responseMimeType: 'application/json',
-        responseSchema: schema,
-        temperature: 0.2, // Low temperature for consistent JSON output
-      };
+  _generateHash(promptText, schema, systemInstruction, model) {
+    const data = JSON.stringify({ promptText, schema, systemInstruction, model });
+    return crypto.createHash('sha256').update(data).digest('hex');
+  }
 
-      if (systemInstruction) {
-        config.systemInstruction = systemInstruction;
-      }
-
-      const response = await ai.models.generateContent({
-        model: this.modelName,
-        contents: promptText,
-        config: config
-      });
-
-      const rawText = response.text;
-      
+  async _executeWithRetry(apiCall, maxRetries = 3, baseDelay = 1000) {
+    let attempt = 0;
+    while (attempt < maxRetries) {
       try {
-        const parsedJSON = JSON.parse(rawText);
-        return { parsedJSON, rawText };
-      } catch (parseError) {
-         throw new CustomError('Failed to parse AI response into JSON', 500, 'AI_PARSE_ERROR');
+        return await apiCall();
+      } catch (error) {
+        attempt++;
+        // Retry only on 429 or 5xx, or specific network timeouts
+        const isRetryable = error.statusCode === 429 || error.statusCode >= 500 || error.code === 'AI_API_ERROR';
+        
+        if (!isRetryable || attempt >= maxRetries) {
+          logger.error(`[AiRequestManager] Request failed permanently after ${attempt} attempts: ${error.message}`);
+          throw error;
+        }
+
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        logger.warn(`[AiRequestManager] Request failed (Attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    } catch (error) {
-       throw new CustomError(`Gemini API Error: ${error.message}`, 502, 'AI_API_ERROR');
     }
+  }
+
+  async generateStructuredJSON(promptText, schema, systemInstruction = null, options = {}) {
+    const {
+      feature = 'general-json',
+      useCache = true,
+      cacheTTL = 3600, // seconds
+      maxRetries = 3
+    } = options;
+
+    const requestHash = this._generateHash(promptText, schema, systemInstruction, this.modelName);
+
+    // 1. Check Cache
+    if (useCache && this.cache.has(requestHash)) {
+      const cachedItem = this.cache.get(requestHash);
+      if (Date.now() - cachedItem.timestamp < cacheTTL * 1000) {
+        logger.info(`[AiRequestManager] CACHE HIT [${feature}] - Hash: ${requestHash.substring(0, 8)}`);
+        return cachedItem.response;
+      } else {
+        this.cache.delete(requestHash); // Expired
+      }
+    }
+
+    // 2. Check In-Flight Deduplication
+    if (this.inFlightRequests.has(requestHash)) {
+      logger.info(`[AiRequestManager] DEDUPLICATION DEDUCT [${feature}] - Awaiting existing promise for hash: ${requestHash.substring(0, 8)}`);
+      return this.inFlightRequests.get(requestHash);
+    }
+
+    // 3. Execute with Retry
+    const startTime = Date.now();
+    const requestPromise = this._executeWithRetry(async () => {
+      const result = await geminiClient.generateStructuredJSON(promptText, schema, systemInstruction);
+      
+      const latency = Date.now() - startTime;
+      logger.info(`[AiRequestManager] API SUCCESS [${feature}] - Latency: ${latency}ms`);
+      
+      if (useCache) {
+        this.cache.set(requestHash, {
+          response: result,
+          timestamp: Date.now()
+        });
+      }
+      
+      return result;
+    }, maxRetries).finally(() => {
+      // Remove from in-flight once complete or failed
+      this.inFlightRequests.delete(requestHash);
+    });
+
+    // Store in in-flight map
+    this.inFlightRequests.set(requestHash, requestPromise);
+
+    return requestPromise;
+  }
+
+  async generateContent(promptText, model = this.modelName) {
+    const requestHash = this._generateHash(promptText, null, null, model);
+    
+    if (this.inFlightRequests.has(requestHash)) {
+      return this.inFlightRequests.get(requestHash);
+    }
+
+    const requestPromise = this._executeWithRetry(async () => {
+      const startTime = Date.now();
+      const result = await geminiClient.generateContent(promptText, model);
+      logger.info(`[AiRequestManager] API SUCCESS [text-gen] - Latency: ${Date.now() - startTime}ms`);
+      return result;
+    }, 3).finally(() => {
+      this.inFlightRequests.delete(requestHash);
+    });
+
+    this.inFlightRequests.set(requestHash, requestPromise);
+    return requestPromise;
   }
 }
 
-export default new GeminiAdapter();
+export default new AiRequestManager();

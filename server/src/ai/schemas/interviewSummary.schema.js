@@ -16,11 +16,17 @@ export const interviewSummarySchema = {
     interviewReadiness: { type: 'string', description: 'e.g., Needs Work, Good, Excellent' },
     personalizedRecommendations: { type: 'array', items: { type: 'string' } },
     learningRoadmap: { type: 'array', items: { type: 'string' } },
+    criticalMistakes: { type: 'array', items: { type: 'string' } },
+    hiringSignals: { type: 'array', items: { type: 'string' } },
+    redFlags: { type: 'array', items: { type: 'string' } },
+    excellentAnswers: { type: 'array', items: { type: 'string' } },
+    missedOpportunities: { type: 'array', items: { type: 'string' } },
   },
   required: [
     'overallScore', 'communicationScore', 'technicalKnowledge', 'confidence', 
     'problemSolving', 'resumeAlignment', 'behavioralSkills', 'overallPerformance',
     'topStrengths', 'weakestAreas', 'topicsToStudy', 'resumeIssuesObserved',
-    'interviewReadiness', 'personalizedRecommendations', 'learningRoadmap'
+    'interviewReadiness', 'personalizedRecommendations', 'learningRoadmap',
+    'criticalMistakes', 'hiringSignals', 'redFlags', 'excellentAnswers', 'missedOpportunities'
   ]
 };

@@ -6,17 +6,20 @@ import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
 import { ErrorState } from '@/components/feedback/ErrorState.jsx';
 import { Flag, Play, AlertTriangle } from 'lucide-react';
 import speechService from '@/services/speech.service.js';
+import { useAuth } from '@/contexts/AuthContext.jsx';
 
+import React, { Suspense, lazy } from 'react';
 import SessionHeader from '../components/SessionHeader.jsx';
 import Timer from '../components/Timer.jsx';
 import QuestionCard from '../components/QuestionCard.jsx';
-import VoiceControls from '../components/VoiceControls.jsx';
+const VoiceControls = lazy(() => import('../components/VoiceControls.jsx'));
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
 
 export default function InterviewSession() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [transcriptDraft, setTranscriptDraft] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -71,7 +74,7 @@ export default function InterviewSession() {
     onSuccess: () => {
       speechService.stopSpeaking();
       speechService.stopListening();
-      navigate(`/interview/results/${id}`);
+      navigate(`/interview/results/${id}`, { replace: true });
     }
   });
 
@@ -112,7 +115,7 @@ export default function InterviewSession() {
 
   useEffect(() => {
     if (session?.status === 'Completed') {
-      navigate(`/interview/results/${id}`);
+      navigate(`/interview/results/${id}`, { replace: true });
     }
   }, [session, navigate, id]);
 
@@ -195,18 +198,22 @@ export default function InterviewSession() {
           />
 
           {isAwaitingAnswer && (
-            <VoiceControls
-              isListening={isListening}
-              isSpeaking={isSpeaking}
-              isProcessing={isProcessing}
-              micPermission={micPermission}
-              transcriptDraft={transcriptDraft}
-              onTranscriptChange={setTranscriptDraft}
-              onToggleListen={handleToggleListening}
-              onReplayQuestion={handleReplay}
-              onSubmit={handleSubmitAnswer}
-              onReqPermission={requestPermission}
-            />
+            <Suspense fallback={<div className="h-48 rounded-2xl bg-slate-900/50 animate-pulse border border-slate-800 w-full"></div>}>
+              <VoiceControls
+                interviewId={id}
+                userId={user?._id}
+                isListening={isListening}
+                isSpeaking={isSpeaking}
+                isProcessing={isProcessing}
+                micPermission={micPermission}
+                transcriptDraft={transcriptDraft}
+                onTranscriptChange={setTranscriptDraft}
+                onToggleListen={handleToggleListening}
+                onReplayQuestion={handleReplay}
+                onSubmit={handleSubmitAnswer}
+                onReqPermission={requestPermission}
+              />
+            </Suspense>
           )}
         </div>
 

@@ -9,6 +9,8 @@ export const interviewEvaluationSchema = {
     weaknesses: { type: 'array', items: { type: 'string' }, description: 'Flaws or missing information in the answer' },
     idealAnswer: { type: 'string', description: 'What a perfect 10/10 answer would look like for this specific candidate' },
     improvementSuggestions: { type: 'array', items: { type: 'string' }, description: 'Actionable tips for next time' },
+    criticalMistakes: { type: 'array', items: { type: 'string' } },
+    hiringSignals: { type: 'array', items: { type: 'string' } },
   },
-  required: ['communicationScore', 'technicalAccuracy', 'confidence', 'completeness', 'strengths', 'weaknesses', 'idealAnswer', 'improvementSuggestions']
+  required: ['communicationScore', 'technicalAccuracy', 'confidence', 'completeness', 'strengths', 'weaknesses', 'idealAnswer', 'improvementSuggestions', 'criticalMistakes', 'hiringSignals']
 };

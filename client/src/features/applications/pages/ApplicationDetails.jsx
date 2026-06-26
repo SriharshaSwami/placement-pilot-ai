@@ -31,7 +31,11 @@ export default function ApplicationDetails() {
   return (
     <div className="space-y-8 pb-12">
       <div className="flex justify-between items-start">
-        <PageHeader title={app.role} description={app.company} />
+        <PageHeader 
+          title={app.role} 
+          description={app.company} 
+          backTo="/applications"
+        />
         <span className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-900/20 px-3 py-1 text-sm font-medium text-blue-700 dark:text-blue-400">
           {app.stage}
         </span>

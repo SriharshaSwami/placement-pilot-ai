@@ -49,20 +49,14 @@ const ResumeDetails = () => {
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="flex items-center space-x-4 mb-4">
-        <button
-          onClick={() => navigate('/resume')}
-          className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex items-center space-x-3">
-          <h2 className="text-2xl font-bold leading-7 text-slate-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-            {resume.title}
-          </h2>
+      <PageHeader 
+        title={resume.title || "Untitled Resume"} 
+        description={`Last updated on ${new Date(resume.updatedAt).toLocaleDateString()}`}
+        backTo="/resume"
+        actions={
           <ResumeParserStatus status={metadata?.parsingStatus} />
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">

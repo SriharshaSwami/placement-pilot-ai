@@ -227,10 +227,11 @@ export default function TailoringDashboard() {
     <div className="space-y-8 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
         <div className="flex items-center space-x-4">
-          <button onClick={() => navigate('/jobs')} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <PageHeader title="AI Tailoring Workbench" description={`Tailoring ${primaryResume.title} for ${job.role} at ${job.company}`} />
+          <PageHeader 
+            title="Tailor Resume to Job" 
+            description={`Optimizing resume for ${job.role} at ${job.company}`}
+            backTo="/jobs"
+          />
         </div>
         {acceptedCount > 0 && (
           <button

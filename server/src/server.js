@@ -15,6 +15,11 @@ const startServer = async () => {
       logger.info(`Server running in ${config.env} mode on port ${config.port}`);
     });
 
+    // Initialize WebSockets
+    import('./websockets/index.js').then(({ setupWebSocket }) => {
+      setupWebSocket(server);
+    });
+
     // Handle port in use error gracefully
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
