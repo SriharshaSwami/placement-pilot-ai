@@ -1,0 +1,35 @@
+import express from 'express';
+
+import authRoutes from './auth.routes.js';
+import usersRoutes from './users.routes.js';
+import resumesRoutes from './resumes.routes.js';
+import jobsRoutes from './jobs.routes.js';
+import applicationsRoutes from './applications.routes.js';
+import interviewsRoutes from './interviews.routes.js';
+import aiRoutes from './ai.routes.js';
+import dashboardRoutes from './dashboard.routes.js';
+import codingRoutes from './coding.routes.js';
+import careerRoutes from './career.routes.js';
+import analyticsRoutes from './analytics.routes.js';
+import knowledgeRoutes from './knowledge.routes.js';
+import memoryRoutes from './memory.routes.js';
+import agentRoutes from './agent.routes.js';
+import tailoringRoutes from './tailoring.routes.js';
+const router = express.Router();
+
+router.use('/auth', authRoutes);
+router.use('/users', usersRoutes);
+router.use('/resumes', resumesRoutes);
+router.use('/jobs', jobsRoutes);
+router.use('/applications', applicationsRoutes);
+router.use('/interviews', interviewsRoutes);
+router.use('/ai', aiRoutes);
+router.use('/dashboard', dashboardRoutes);
+router.use('/coding', codingRoutes);
+router.use('/career', careerRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/knowledge', knowledgeRoutes);
+router.use('/memory', memoryRoutes);
+router.use('/agents', agentRoutes);
+router.use('/tailoring', tailoringRoutes);
+export default router;

@@ -1,0 +1,20 @@
+{
+  "name": "placementpilot-ai",
+  "version": "1.0.0",
+  "description": "PlacementPilot AI Repository",
+  "main": "index.js",
+  "scripts": {
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build:client": "npm run build --prefix client",
+    "start:server": "npm start --prefix server",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  }
+}

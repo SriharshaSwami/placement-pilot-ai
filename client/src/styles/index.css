@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-slate-900 antialiased transition-colors duration-200;
+  }
+
+  body.dark {
+    @apply bg-slate-900 text-slate-50;
+  }
+}

@@ -1,0 +1,23 @@
+import winston from 'winston';
+import config from '../config/index.js';
+
+const { combine, timestamp, printf, colorize, errors } = winston.format;
+
+const logFormat = printf(({ level, message, timestamp, stack }) => {
+  return `${timestamp} ${level}: ${stack || message}`;
+});
+
+const logger = winston.createLogger({
+  level: config.env === 'development' ? 'debug' : 'info',
+  format: combine(
+    errors({ stack: true }),
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    config.env === 'development' ? colorize() : winston.format.uncolorize(),
+    logFormat
+  ),
+  transports: [
+    new winston.transports.Console(),
+  ],
+});
+
+export default logger;
