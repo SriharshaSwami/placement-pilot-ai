@@ -13,7 +13,12 @@ export const AuthProvider = ({ children }) => {
         const response = await getMe();
         setUser(response.data.user);
       } catch (error) {
-        setUser(null);
+        if (error?.status === 401 || error?.response?.status === 401) {
+          setUser(null);
+        } else {
+          console.error("Network or server error during auth check:", error);
+          // Do not log the user out on network errors. Wait for next request.
+        }
       } finally {
         setLoading(false);
       }

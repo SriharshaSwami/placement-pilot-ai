@@ -19,7 +19,9 @@ api.interceptors.response.use(
     // Handle global errors here
     if (status === 401) {
       window.dispatchEvent(new Event('unauthorized'));
-      toast.error('Session expired. Please log in again.');
+      if (!error.config?.url?.includes('/auth/me')) {
+        toast.error('Session expired. Please log in again.');
+      }
     } else if (status === 403) {
       toast.error('You do not have permission to perform this action.');
     } else if (status === 404) {

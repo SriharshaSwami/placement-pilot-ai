@@ -19,9 +19,17 @@ class LiveVoiceService {
 
     if (this.ws) this.disconnect();
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Using environment variable or default backend port
-    const wsUrl = `${protocol}//${window.location.hostname}:5000/api/v1/live-session`;
+    // Ensure AudioContext is initialized and unlocked during the user's click event
+    if (!this.audioContext) {
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    }
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+
+    // Build WebSocket URL from Axios config base
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+    const wsUrl = apiBase.replace(/^http/, 'ws') + '/live-session';
 
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(wsUrl);
@@ -59,9 +67,13 @@ class LiveVoiceService {
 
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000 // Gemini expects 16kHz
-      });
+      
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+      }
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
 
       const source = this.audioContext.createMediaStreamSource(this.mediaStream);
       // Deprecated but works everywhere without needing an external script file (AudioWorklet requires one)
@@ -73,7 +85,13 @@ class LiveVoiceService {
       };
 
       source.connect(this.processor);
-      this.processor.connect(this.audioContext.destination);
+      // We purposefully DO NOT connect processor to destination to prevent mic feedback loop!
+      // However, Chrome sometimes garbage collects disconnected script processors,
+      // so we connect it to a silent gain node as a workaround.
+      const silentGain = this.audioContext.createGain();
+      silentGain.gain.value = 0;
+      this.processor.connect(silentGain);
+      silentGain.connect(this.audioContext.destination);
 
       if (this.onStateChange) this.onStateChange('Listening');
     } catch (err) {
@@ -115,6 +133,9 @@ class LiveVoiceService {
   async playAudioChunk(base64Audio) {
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+    }
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
     }
 
     try {

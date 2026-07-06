@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getInterview, submitAnswer, generateNextQuestion, finishInterview } from '@/services/interview.service.js';
 import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
 import { ErrorState } from '@/components/feedback/ErrorState.jsx';
-import { Flag, Play, AlertTriangle } from 'lucide-react';
+import { Flag, Play, AlertTriangle, RefreshCw } from 'lucide-react';
 import speechService from '@/services/speech.service.js';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 
@@ -14,6 +14,7 @@ import Timer from '../components/Timer.jsx';
 import QuestionCard from '../components/QuestionCard.jsx';
 const VoiceControls = lazy(() => import('../components/VoiceControls.jsx'));
 import TranscriptPanel from '../components/TranscriptPanel.jsx';
+import { useLiveVoice } from '../hooks/useLiveVoice.js';
 
 export default function InterviewSession() {
   const { id } = useParams();
@@ -25,6 +26,10 @@ export default function InterviewSession() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [micPermission, setMicPermission] = useState('prompt');
+  
+  // Gemini Live Mode State
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const liveVoice = useLiveVoice(id, user?._id);
   
   // Ref to track which question index we have already spoken, to avoid double-speaking on re-renders
   const lastSpokenSeqRef = useRef(null);
@@ -75,8 +80,19 @@ export default function InterviewSession() {
       speechService.stopSpeaking();
       speechService.stopListening();
       navigate(`/interview/results/${id}`, { replace: true });
+    },
+    onError: () => {
+      isFinishingRef.current = false;
     }
   });
+
+  const isFinishingRef = useRef(false);
+  
+  const handleFinish = React.useCallback(() => {
+    if (isFinishingRef.current || finishMutation.isPending || finishMutation.isSuccess) return;
+    isFinishingRef.current = true;
+    finishMutation.mutate();
+  }, [finishMutation]);
 
   const questions = session?.questions || [];
   const currentQuestion = questions.length > 0 ? questions[questions.length - 1] : null;
@@ -86,6 +102,9 @@ export default function InterviewSession() {
   useEffect(() => {
     if (currentQuestion && isAwaitingAnswer && lastSpokenSeqRef.current !== currentQuestion.sequenceNumber) {
       lastSpokenSeqRef.current = currentQuestion.sequenceNumber;
+      
+      // If we are in Live Voice mode, let Gemini handle the conversation naturally!
+      if (isLiveMode) return;
       
       // Stop listening if we were listening, speak, then auto-listen
       speechService.stopListening();
@@ -103,7 +122,7 @@ export default function InterviewSession() {
         }
       );
     }
-  }, [currentQuestion, isAwaitingAnswer, micPermission]);
+  }, [currentQuestion, isAwaitingAnswer, micPermission, isLiveMode]);
 
   // Clean up synthesis/recognition on unmount
   useEffect(() => {
@@ -212,6 +231,9 @@ export default function InterviewSession() {
                 onReplayQuestion={handleReplay}
                 onSubmit={handleSubmitAnswer}
                 onReqPermission={requestPermission}
+                isLiveMode={isLiveMode}
+                setIsLiveMode={setIsLiveMode}
+                liveVoice={liveVoice}
               />
             </Suspense>
           )}
@@ -224,7 +246,7 @@ export default function InterviewSession() {
             <Timer
               startTime={session.createdAt}
               durationMinutes={session.config.duration}
-              onTimeUp={() => finishMutation.mutate()}
+              onTimeUp={handleFinish}
             />
           </div>
 
@@ -233,12 +255,21 @@ export default function InterviewSession() {
 
             <div className="border-t border-slate-800 pt-4 flex justify-between items-center">
               <button
-                onClick={() => finishMutation.mutate()}
+                onClick={handleFinish}
                 disabled={finishMutation.isPending}
                 className="w-full inline-flex items-center justify-center gap-x-2 py-2.5 rounded-xl border border-red-900/30 hover:border-red-900/60 bg-red-950/20 hover:bg-red-950/40 text-xs font-bold text-red-400 hover:text-red-300 disabled:opacity-40 transition-all duration-200"
               >
-                <Flag className="h-4 w-4" />
-                Finish Interview & Generate Report
+                {finishMutation.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Generating Report...
+                  </>
+                ) : (
+                  <>
+                    <Flag className="h-4 w-4" />
+                    Finish Interview & Generate Report
+                  </>
+                )}
               </button>
             </div>
           </div>

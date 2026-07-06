@@ -9,6 +9,7 @@ import { ResumeParsingProgress } from '../components/ResumeParsingProgress.jsx';
 import { ParsingErrorCard } from '../components/ParsingErrorCard.jsx';
 import { ParsingSummary } from '../components/ParsingSummary.jsx';
 import { ResumeSectionViewer } from '../components/ResumeSectionViewer.jsx';
+import { ResumeVersionsHistory } from '../components/ResumeVersionsHistory.jsx';
 import { getResume, parseResume } from '@/services/resume.service.js';
 import { ArrowLeft, Play } from 'lucide-react';
 
@@ -78,6 +79,12 @@ const ResumeDetails = () => {
                     Reparse
                   </button>
                   <Link
+                    to={`/resume/${id}/preview`}
+                    className="inline-flex items-center rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    Preview ATS Layout
+                  </Link>
+                  <Link
                     to={`/resume/${id}/analysis`}
                     className="inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 transition-colors"
                   >
@@ -88,6 +95,12 @@ const ResumeDetails = () => {
               <ResumeSectionViewer sections={parsedData?.sections} />
             </div>
           )}
+
+          {/* Version History Component */}
+          <ResumeVersionsHistory 
+            resumeId={resume._id || id} 
+            currentVersionId={resume._id || id} 
+          />
         </div>
 
         <div className="space-y-8">

@@ -13,6 +13,12 @@ export const getSession = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(session, 'Session retrieved'));
 });
 
+export const generateTargetedSuggestion = asyncHandler(async (req, res) => {
+  const { targetSkill } = req.body;
+  const suggestion = await tailoringService.generateTargetedSuggestion(req.user._id, req.params.sessionId, targetSkill);
+  res.status(201).json(successResponse(suggestion, 'Targeted suggestion generated'));
+});
+
 export const getSessionByParams = asyncHandler(async (req, res) => {
   const { jobId, resumeId } = req.query;
   const session = await tailoringService.getSessionByJobAndResume(req.user._id, jobId, resumeId);

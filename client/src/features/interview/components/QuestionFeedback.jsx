@@ -84,7 +84,7 @@ export default function QuestionFeedback({ questionAnalysis, questionText, candi
             Suggested Better Answer
           </h4>
           <p className="text-sm text-slate-400 italic bg-slate-950 p-4 rounded-lg border border-slate-800">
-            "{suggestedBetterAnswer}"
+            &quot;{suggestedBetterAnswer}&quot;
           </p>
         </div>
         

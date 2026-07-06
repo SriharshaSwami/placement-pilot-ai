@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Mic, MicOff, Send, Volume2, RefreshCw, AlertCircle, Radio } from 'lucide-react';
-import { useLiveVoice } from '../hooks/useLiveVoice.js';
 
 export default function VoiceControls({
   interviewId,
@@ -13,14 +12,14 @@ export default function VoiceControls({
   onTranscriptChange,
   onToggleListen,
   onReplayQuestion,
-  onReqPermission
+  onReqPermission,
+  onSubmit,
+  isLiveMode,
+  setIsLiveMode,
+  liveVoice
 }) {
   const isMicBlocked = micPermission === 'denied';
   const isMicUnavailable = micPermission === 'unavailable';
-
-  // Gemini Live Mode Toggle
-  const [isLiveMode, setIsLiveMode] = useState(false);
-  const liveVoice = useLiveVoice(interviewId, userId);
 
   const toggleLiveMode = () => {
     if (isLiveMode) {
@@ -101,7 +100,13 @@ export default function VoiceControls({
           ) : (
             <>
               <Mic className="w-5 h-5 animate-pulse" />
-              <span>{isLiveMode ? (liveVoice.state === 'Connecting' ? 'Connecting...' : 'Start Live Speak') : 'Start Speaking'}</span>
+              <span>
+                {isLiveMode 
+                  ? (liveVoice.state === 'Connecting' ? 'Connecting...' : 
+                     liveVoice.state === 'Error' ? 'Live Mode Error' :
+                     'Start Live Speak') 
+                  : 'Start Speaking'}
+              </span>
             </>
           )}
         </button>

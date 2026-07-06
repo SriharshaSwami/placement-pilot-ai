@@ -28,10 +28,10 @@ export const resumeTailoringSchema = {
           priority: { type: 'string', enum: ['High', 'Medium', 'Low'] },
           confidence: { type: 'number', description: '0-100 confidence score that this change is factual based on context' },
           reason: { type: 'string', description: 'Why this change is suggested' },
-          originalContent: { type: 'string', description: 'The exact original text being replaced, or empty if it is a net-new addition' },
+          targetPath: { type: 'string', description: 'The exact dot-notation path in structuredData to update, e.g. "experience.0.responsibilities.1" or "professionalSummary"' },
           suggestedContent: { type: 'string', description: 'The new tailored text to apply' },
         },
-        required: ['id', 'section', 'priority', 'confidence', 'reason', 'suggestedContent']
+        required: ['id', 'section', 'priority', 'confidence', 'reason', 'targetPath', 'suggestedContent']
       }
     }
   },

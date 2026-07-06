@@ -192,7 +192,7 @@ export default function TailoringDashboard() {
     } else {
       const diffResult = diffText(original, suggested);
       return (
-        <div className="text-sm bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 whitespace-pre-wrap leading-relaxed">
+        <div className="text-sm bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 whitespace-pre-wrap break-words leading-relaxed">
           {diffResult.map((part, index) => {
             if (part.type === 'added') {
               return (
@@ -375,7 +375,7 @@ export default function TailoringDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Original</h4>
-                    <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed bg-slate-50 dark:bg-slate-900/30 p-3 rounded-lg min-h-[60px]">
+                    <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words leading-relaxed bg-slate-50 dark:bg-slate-900/30 p-3 rounded-lg min-h-[60px]">
                       {origText}
                     </div>
                   </div>
@@ -384,7 +384,7 @@ export default function TailoringDashboard() {
                     {hasChanges ? (
                       renderDiffContent(sectionKey, origText, tailoredText)
                     ) : (
-                      <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed bg-slate-50 dark:bg-slate-900/30 p-3 rounded-lg min-h-[60px]">
+                      <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words leading-relaxed bg-slate-50 dark:bg-slate-900/30 p-3 rounded-lg min-h-[60px]">
                         {origText}
                       </div>
                     )}

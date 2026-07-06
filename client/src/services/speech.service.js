@@ -35,7 +35,12 @@ class SpeechService {
     this.activeUtterance.onstart = onStart;
     this.activeUtterance.onend = onEnd;
     this.activeUtterance.onerror = (e) => {
-      console.error('[SpeechService] Synthesis error:', e);
+      if (e.error === 'not-allowed') {
+        console.warn('[SpeechService] Autoplay blocked by browser.');
+        // We do not toast here to avoid spam, user can just click Play manually.
+      } else if (e.error !== 'interrupted') {
+        console.error('[SpeechService] Synthesis error:', e);
+      }
       onEnd();
     };
 

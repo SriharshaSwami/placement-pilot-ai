@@ -9,7 +9,8 @@ import {
   UserCircle, 
   Settings,
   Menu,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { useLayout } from '../../contexts/LayoutContext.jsx';
 import { classNames } from '../../utils/formatters.js';
@@ -20,6 +21,7 @@ const navigation = [
   { name: 'Job Board', href: '/jobs', icon: Briefcase },
   { name: 'Applications', href: '/applications', icon: CheckSquare },
   { name: 'Interview Prep', href: '/interview', icon: Video },
+  { name: 'Semantic Search', href: '/search', icon: Search },
   { name: 'AI Assistant', href: '/ai', icon: Bot },
 ];
 

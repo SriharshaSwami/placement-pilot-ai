@@ -13,8 +13,8 @@ export default function InterviewSetup() {
   const [resumeId, setResumeId] = useState('');
   const [jobId, setJobId] = useState('');
 
-  const { data: resumesRes } = useQuery({ queryKey: ['resumes'], queryFn: getResumes });
-  const { data: jobsRes } = useQuery({ queryKey: ['jobs'], queryFn: getJobs });
+  const { data: resumesRes } = useQuery({ queryKey: ['resumes'], queryFn: () => getResumes() });
+  const { data: jobsRes } = useQuery({ queryKey: ['jobs'], queryFn: () => getJobs() });
 
   const setupMutation = useMutation({
     mutationFn: (data) => setupInterview(data),

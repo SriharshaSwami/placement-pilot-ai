@@ -1,6 +1,7 @@
 import express from 'express';
 
 import authRoutes from './auth.routes.js';
+import sessionRoutes from './session.routes.js';
 import usersRoutes from './users.routes.js';
 import resumesRoutes from './resumes.routes.js';
 import jobsRoutes from './jobs.routes.js';
@@ -15,9 +16,11 @@ import knowledgeRoutes from './knowledge.routes.js';
 import memoryRoutes from './memory.routes.js';
 import agentRoutes from './agent.routes.js';
 import tailoringRoutes from './tailoring.routes.js';
+import searchRoutes from './search.routes.js';
 const router = express.Router();
 
 router.use('/auth', authRoutes);
+router.use('/sessions', sessionRoutes);
 router.use('/users', usersRoutes);
 router.use('/resumes', resumesRoutes);
 router.use('/jobs', jobsRoutes);
@@ -32,4 +35,5 @@ router.use('/knowledge', knowledgeRoutes);
 router.use('/memory', memoryRoutes);
 router.use('/agents', agentRoutes);
 router.use('/tailoring', tailoringRoutes);
+router.use('/search', searchRoutes);
 export default router;

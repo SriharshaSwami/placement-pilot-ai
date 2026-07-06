@@ -18,15 +18,16 @@ ${JSON.stringify({
   extractedText: parsedJob.extractedText,
 }, null, 2)}
 
-### CANDIDATE RESUME ###
-${JSON.stringify(parsedResume.sections, null, 2)}
+### CANDIDATE RESUME (STRUCTURED JSON) ###
+${JSON.stringify(parsedResume.structuredData, null, 2)}
   `.trim());
 
   builder.setTask(`
 1. Analyze the match between the candidate's resume and the job description.
 2. Generate an overall match percentage, identifying matched and missing skills/keywords.
 3. Generate specific, targeted rewrite suggestions to tailor the resume to this specific job.
-4. For each suggestion, provide the section name, priority, confidence score (how sure you are it's factual), reason for change, the original text snippet, and the new suggested text.
+4. For each suggestion, provide the precise JSON dot-notation \`targetPath\` corresponding to the exact field you are modifying (e.g., 'experience.0.responsibilities.1', 'professionalSummary', 'skills.languages').
+5. Include section name, priority, confidence score, reason, and the new suggested text.
 5. Provide a unique string 'id' for each suggestion.
   `.trim());
 

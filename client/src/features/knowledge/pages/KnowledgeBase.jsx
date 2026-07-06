@@ -3,6 +3,7 @@ import { getKnowledgeBase } from '@/services/knowledge.service.js';
 import { PageHeader } from '@/components/ui/PageHeader.jsx';
 import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
 import { KnowledgeCard } from '../components/KnowledgeCard.jsx';
+import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { Database, ShieldCheck, Zap } from 'lucide-react';
 
 export default function KnowledgeBase() {
@@ -38,11 +39,11 @@ export default function KnowledgeBase() {
       <div className="space-y-6">
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Active Indexes</h3>
         {documents.length === 0 ? (
-          <div className="text-center py-20 bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl">
-            <Database className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Knowledge Base Empty</h2>
-            <p className="text-slate-500">Upload a resume or complete an interview to start generating vector embeddings.</p>
-          </div>
+          <EmptyState
+            icon={Database}
+            title="Knowledge Base Empty"
+            description="Upload a resume or complete an interview to start generating vector embeddings."
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {documents.map(doc => (

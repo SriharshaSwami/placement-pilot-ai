@@ -38,8 +38,7 @@ const UserSettings = () => {
       />
 
       <div className="space-y-6">
-        {/* Appearance */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+        <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <Sun className="w-5 h-5" />
@@ -75,8 +74,7 @@ const UserSettings = () => {
           </div>
         </div>
 
-        {/* Notifications */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+        <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
               <Bell className="w-5 h-5" />
@@ -129,8 +127,7 @@ const UserSettings = () => {
           </div>
         </div>
 
-        {/* Danger Zone */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-red-200 dark:border-red-900/50 p-6">
+        <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-red-200 dark:border-red-900/50 p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
               <Shield className="w-5 h-5" />

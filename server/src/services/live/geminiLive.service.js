@@ -1,13 +1,14 @@
 import WebSocket from 'ws';
 import { VoiceProviderInterface } from './voiceProvider.interface.js';
 import logger from '../../utils/logger.js';
+import config from '../../config/index.js';
 
 export class GeminiLiveService extends VoiceProviderInterface {
   constructor() {
     super();
     this.ws = null;
     this.onEvent = null;
-    this.apiKey = process.env.GEMINI_API_KEY;
+    this.apiKey = config.gemini.apiKey;
     this.model = 'models/gemini-2.0-flash-exp';
     this.isConnected = false;
   }
@@ -130,8 +131,17 @@ export class GeminiLiveService extends VoiceProviderInterface {
 
   interrupt() {
     if (!this.isConnected || !this.ws) return;
-    // Sending empty chunk or turn complete might interrupt depending on API behavior
-    // For Gemini, sending a new client content typically interrupts.
+    // Sending a new client content message interrupts the model's current generation turn
+    const message = {
+      clientContent: {
+        turns: [{
+          role: 'user',
+          parts: []
+        }],
+        turnComplete: false
+      }
+    };
+    this.ws.send(JSON.stringify(message));
     this.onEvent('Interrupted');
   }
 

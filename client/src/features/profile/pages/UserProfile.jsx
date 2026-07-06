@@ -18,7 +18,7 @@ const UserProfile = () => {
         description="Manage your personal details and professional identity." 
       />
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         {/* Banner */}
         <div className="h-32 bg-gradient-to-r from-indigo-500 to-fuchsia-500 relative">
           <div className="absolute -bottom-12 left-8">

@@ -8,6 +8,10 @@ export const createJob = asyncHandler(async (req, res) => {
 });
 
 export const getJobs = asyncHandler(async (req, res) => {
+  if (req.query.resumeId) {
+    const jobs = await jobsService.getRankedJobs(req.user._id, req.query.resumeId);
+    return res.status(200).json(successResponse(jobs, 'Ranked jobs fetched successfully'));
+  }
   const jobs = await jobsService.listJobs(req.user._id);
   res.status(200).json(successResponse(jobs, 'Jobs fetched successfully'));
 });

@@ -22,3 +22,8 @@ export const getExecutionHistory = asyncHandler(async (req, res) => {
     
   res.status(200).json(successResponse(history, 'Execution history retrieved'));
 });
+
+export const clearExecutionHistory = asyncHandler(async (req, res) => {
+  await AgentExecution.deleteMany({ userId: req.user._id });
+  res.status(200).json(successResponse(null, 'Execution history cleared'));
+});

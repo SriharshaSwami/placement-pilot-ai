@@ -12,6 +12,9 @@ router.post('/:sessionId/save', (req, res, next) => {
   // We'll import and map it from controller
   import('../controllers/tailoring.controller.js').then(c => c.saveTailoredResume(req, res, next));
 });
+router.post('/:sessionId/targeted', (req, res, next) => {
+  import('../controllers/tailoring.controller.js').then(c => c.generateTargetedSuggestion(req, res, next));
+});
 router.patch('/:sessionId/suggestions', (req, res, next) => {
   import('../controllers/tailoring.controller.js').then(c => c.batchUpdateSuggestions(req, res, next));
 });

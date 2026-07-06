@@ -74,6 +74,9 @@ const interviewSessionSchema = new mongoose.Schema({
   
   summary: { type: interviewSummarySchema, default: null },
   coachingReport: { type: mongoose.Schema.Types.Mixed, default: null },
+
+  embedding: { type: [Number], default: null }, // Cosine Similarity Vector
+  embeddingHash: { type: String, default: null }, // Hash of content to prevent duplicate generation
 }, {
   timestamps: true,
 });

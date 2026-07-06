@@ -1,9 +1,10 @@
 import rateLimit from 'express-rate-limit';
+import config from '../config/index.js';
 
-// Standard API Rate Limiting (100 req per minute)
+// Standard API Rate Limiting
 export const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, 
-  max: 100,
+  windowMs: config.rateLimit.api.windowMs, 
+  max: config.rateLimit.api.max,
   standardHeaders: true, 
   legacyHeaders: false, 
   message: {
@@ -12,10 +13,10 @@ export const apiLimiter = rateLimit({
   }
 });
 
-// Strict Rate Limiting for heavy AI Tasks (20 req per minute)
+// Strict Rate Limiting for heavy AI Tasks
 export const aiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 20,
+  windowMs: config.rateLimit.ai.windowMs,
+  max: config.rateLimit.ai.max,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -24,14 +25,14 @@ export const aiLimiter = rateLimit({
   }
 });
 
-// Upload Rate Limiting (10 uploads per hour)
+// Upload Rate Limiting
 export const uploadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
+  windowMs: config.rateLimit.upload.windowMs,
+  max: config.rateLimit.upload.max,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
-    message: 'Upload limit reached (10 files/hour). Please try again later.'
+    message: 'Upload limit reached. Please try again later.'
   }
 });

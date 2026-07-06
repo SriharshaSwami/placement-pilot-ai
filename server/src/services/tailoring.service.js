@@ -1,5 +1,6 @@
 import geminiAdapter from '../ai/adapters/gemini.adapter.js';
 import { buildTailoringPrompt } from '../ai/prompts/resume/tailor.prompt.js';
+import { buildTargetedPrompt } from '../ai/prompts/resume/targeted.prompt.js';
 import { resumeTailoringSchema } from '../ai/schemas/resumeTailoring.schema.js';
 import { validateSchema } from '../ai/validators/schema.validator.js';
 import TailoringSession from '../models/TailoringSession.js';
@@ -18,6 +19,11 @@ class TailoringService {
       throw new CustomError('Resume must be parsed first', 400, 'NOT_PARSED');
     }
 
+    if (!resume.parsedData.structuredData) {
+      const resumeParserService = (await import('./parser/resumeParser.service.js')).default;
+      resume.parsedData = await resumeParserService.createStructuredResume(resumeId);
+    }
+
     const job = await jobRepository.findById(jobId);
     if (!job || job.userId.toString() !== userId.toString()) {
       throw new CustomError('Job not found', 404, 'NOT_FOUND');
@@ -29,9 +35,26 @@ class TailoringService {
       return existingSession;
     }
 
+    // Optional: Calculate embedding similarity
+    let similarityScore = null;
+    if (resume.embedding && job.embedding) {
+      try {
+        const embeddingService = (await import('../embedding.service.js')).default;
+        similarityScore = embeddingService.calculateSimilarity(resume.embedding, job.embedding);
+      } catch (err) {
+        console.error('[TailoringService] Failed to calculate similarity:', err.message);
+      }
+    }
+
     // 3. Build AI Prompt
     const promptBuilder = buildTailoringPrompt(resume.parsedData, job);
-    const systemInstruction = promptBuilder.getSystemInstruction();
+    
+    // Inject similarity context if available
+    let systemInstruction = promptBuilder.getSystemInstruction();
+    if (similarityScore !== null) {
+      systemInstruction += `\n\nContext: The semantic similarity score between this resume and job description is ${(similarityScore * 100).toFixed(1)}%. Use this as an indicator of how much tailoring is needed (lower score = more aggressive tailoring required).`;
+    }
+
     const promptContent = promptBuilder.buildContent();
 
     let parsedJSON;
@@ -62,10 +85,9 @@ class TailoringService {
             if (sug.priority === 'High') conf += 5;
             if (sug.priority === 'Low') conf -= 10;
 
-            // Adjust based on edit type size
-            const origWords = (sug.originalContent || '').split(/\s+/).filter(Boolean).length;
+            // Adjust based on edit type size (Not using originalContent anymore)
             const sugWords = (sug.suggestedContent || '').split(/\s+/).filter(Boolean).length;
-            if (origWords > 0 && Math.abs(origWords - sugWords) < 3) {
+            if (sugWords > 0 && sugWords < 5) {
               // Very small minor wording improvement
               conf -= 15;
             }
@@ -110,6 +132,49 @@ class TailoringService {
     return newSession.save();
   }
 
+  async generateTargetedSuggestion(userId, sessionId, targetSkill) {
+    const session = await TailoringSession.findById(sessionId).populate('resumeId');
+    if (!session || session.userId.toString() !== userId.toString()) {
+      throw new CustomError('Session not found', 404, 'NOT_FOUND');
+    }
+
+    const promptBuilder = buildTargetedPrompt(session.resumeId.parsedData, targetSkill);
+    const promptContent = promptBuilder.buildContent();
+
+    try {
+      const response = await geminiAdapter.generateStructuredJSON(
+        promptContent,
+        {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            section: { type: 'string' },
+            priority: { type: 'string' },
+            confidence: { type: 'number' },
+            reason: { type: 'string' },
+            targetPath: { type: 'string' },
+            suggestedContent: { type: 'string' }
+          },
+          required: ['id', 'section', 'priority', 'confidence', 'reason', 'targetPath', 'suggestedContent']
+        },
+        promptBuilder.getSystemInstruction()
+      );
+
+      const newSuggestion = {
+        ...response.parsedJSON,
+        id: `targeted-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        status: 'pending'
+      };
+
+      session.suggestions.push(newSuggestion);
+      await session.save();
+
+      return newSuggestion;
+    } catch (error) {
+      throw new CustomError(`Failed to generate targeted suggestion: ${error.message}`, 500, 'AI_ERROR');
+    }
+  }
+
   async getSession(userId, sessionId) {
     const session = await TailoringSession.findById(sessionId).populate('jobId').populate('resumeId');
     if (!session || session.userId.toString() !== userId.toString()) {
@@ -119,7 +184,13 @@ class TailoringService {
   }
 
   async getSessionByJobAndResume(userId, jobId, resumeId) {
-    const session = await TailoringSession.findOne({ userId, jobId, resumeId });
+    let session = await TailoringSession.findOne({ userId, jobId, resumeId });
+    if (!session) {
+      const resume = await resumeRepository.findById(resumeId);
+      if (resume && resume.parentResumeId) {
+        session = await TailoringSession.findOne({ userId, jobId, resumeId: resume.parentResumeId });
+      }
+    }
     return session;
   }
 
@@ -164,43 +235,65 @@ class TailoringService {
     const originalResume = session.resumeId;
     const job = session.jobId;
 
-    // Apply accepted suggestions to the sections Map
-    const sections = new Map(originalResume.parsedData.sections);
+    // Build a new structured data object
+    const newStructuredData = JSON.parse(JSON.stringify(originalResume.parsedData.structuredData));
+    const changedSections = new Set();
     const acceptedSuggestions = session.suggestions.filter(s => s.status === 'accepted');
 
     for (const sug of acceptedSuggestions) {
-      let matchedKey = null;
-      for (const key of sections.keys()) {
-        if (key.toLowerCase().replace(/[^a-z]/g, '') === sug.section.toLowerCase().replace(/[^a-z]/g, '')) {
-          matchedKey = key;
+      if (!sug.targetPath) continue;
+
+      const keys = sug.targetPath.split('.');
+      let current = newStructuredData;
+      let validPath = true;
+
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (current[keys[i]] === undefined) {
+          validPath = false;
           break;
         }
+        current = current[keys[i]];
       }
 
-      if (matchedKey) {
-        let currentText = sections.get(matchedKey) || '';
-        if (sug.originalContent) {
-          currentText = currentText.replace(sug.originalContent, sug.suggestedContent);
-        } else {
-          currentText += '\n' + sug.suggestedContent;
+      if (validPath) {
+        const lastKey = keys[keys.length - 1];
+        if (current[lastKey] !== undefined) {
+          if (typeof current[lastKey] === 'object' && current[lastKey] !== null && 'value' in current[lastKey]) {
+            current[lastKey].value = sug.suggestedContent;
+          } else {
+            current[lastKey] = sug.suggestedContent;
+          }
+          changedSections.add(keys[0]);
         }
-        sections.set(matchedKey, currentText);
       }
     }
+
+    // Determine the highest version for this parent
+    const parentId = originalResume.parentResumeId || originalResume._id;
+    const versionsCount = await resumeRepository.count({ parentResumeId: parentId });
+    const nextVersion = originalResume.parentResumeId ? originalResume.version + 1 : 2;
+
+    const summaryStr = changedSections.size > 0 
+      ? `Tailored sections: ${Array.from(changedSections).join(', ')}` 
+      : 'No sections changed (Base duplicate)';
 
     // Create a new resume version in db
     const newResume = await resumeRepository.create({
       userId,
-      title: title || `${originalResume.title} (Tailored for ${job.company})`,
+      title: title || `${originalResume.title} (Tailored for ${job.company}) v${nextVersion}`,
       originalFilename: originalResume.originalFilename,
       cloudinaryPublicId: originalResume.cloudinaryPublicId,
       cloudinaryUrl: originalResume.cloudinaryUrl,
       fileSize: originalResume.fileSize,
       mimeType: originalResume.mimeType,
       isPrimary: false,
+      version: nextVersion,
+      parentResumeId: parentId,
+      jobId: job._id,
+      tailoringSummary: summaryStr,
       parsedData: {
         ...originalResume.parsedData,
-        sections: Object.fromEntries(sections),
+        structuredData: newStructuredData
       },
       uploadStatus: 'completed'
     });

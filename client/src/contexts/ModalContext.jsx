@@ -112,7 +112,7 @@ export const ModalProvider = ({ children }) => {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ type: 'spring', duration: 0.3 }}
-              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
+              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-surface-light p-6 shadow-2xl dark:bg-surface-dark border border-slate-200 dark:border-slate-800"
               role="dialog"
               aria-modal="true"
               aria-labelledby="modal-title"
@@ -178,7 +178,7 @@ export const ModalProvider = ({ children }) => {
                     <button
                       type="button"
                       onClick={handleCancel}
-                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 transition-colors shadow-sm"
+                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-surface-light px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:bg-surface-dark dark:text-slate-300 dark:hover:bg-slate-800/80 transition-colors shadow-sm"
                     >
                       {modalConfig.cancelLabel}
                     </button>

@@ -23,3 +23,7 @@ export const batchUpdateSuggestions = async (sessionId, status) => {
 export const saveTailoredResume = async (sessionId, title) => {
   return api.post(`/tailoring/${sessionId}/save`, { title });
 };
+
+export const generateTargetedSuggestion = async (sessionId, targetSkill) => {
+  return api.post(`/tailoring/${sessionId}/targeted`, { targetSkill });
+};

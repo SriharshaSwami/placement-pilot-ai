@@ -316,17 +316,67 @@ class ResumeParserService {
       const { buildResumeParserPrompt } = await import('../../ai/prompts/resume/resumeParser.prompt.js');
       const geminiAdapter = (await import('../../ai/adapters/gemini.adapter.js')).default;
       const { resumeParserSchema } = await import('../../validators/resume.validator.js');
+      const { resumeParserSchemaJSON } = await import('../../ai/schemas/resumeParser.schema.js');
 
       const promptText = buildResumeParserPrompt(cleanedText);
 
       const { parsedJSON } = await geminiAdapter.generateStructuredJSON(
         promptText,
-        null,
-        'You must respond ONLY with valid JSON matching the requested structure.'
+        resumeParserSchemaJSON,
+        'You must respond ONLY with valid JSON matching the requested structure. Extract all relevant details strictly matching the schema.'
       );
 
+      // Map simple JSON to { value, confidence } format expected by Zod
+      const mapToConfidence = (val) => {
+        if (val === undefined || val === null || val === '') return null;
+        return { value: val, confidence: 0.95 };
+      };
+
+      const mappedJSON = {};
+      
+      if (parsedJSON.candidate) {
+        mappedJSON.candidate = {};
+        for (const key of Object.keys(parsedJSON.candidate)) {
+          mappedJSON.candidate[key] = mapToConfidence(parsedJSON.candidate[key]);
+        }
+      }
+      
+      mappedJSON.professionalSummary = mapToConfidence(parsedJSON.professionalSummary);
+      
+      if (parsedJSON.skills) {
+        mappedJSON.skills = {};
+        for (const key of Object.keys(parsedJSON.skills)) {
+          const arr = parsedJSON.skills[key];
+          if (Array.isArray(arr)) {
+            mappedJSON.skills[key] = arr.map(mapToConfidence).filter(Boolean);
+          }
+        }
+      }
+      
+      const arraySections = [
+        'education', 'experience', 'projects', 'certifications', 
+        'achievements', 'leadership', 'publications', 'openSource', 
+        'hackathons', 'codingProfiles', 'languagesSpoken'
+      ];
+      
+      for (const section of arraySections) {
+        if (Array.isArray(parsedJSON[section])) {
+          mappedJSON[section] = parsedJSON[section].map(item => {
+            const mappedItem = {};
+            for (const [key, val] of Object.entries(item)) {
+              if (Array.isArray(val)) {
+                mappedItem[key] = val.map(mapToConfidence).filter(Boolean);
+              } else {
+                mappedItem[key] = mapToConfidence(val);
+              }
+            }
+            return mappedItem;
+          });
+        }
+      }
+
       // Validate with Zod
-      const validatedData = resumeParserSchema.parse(parsedJSON);
+      const validatedData = resumeParserSchema.parse(mappedJSON);
       const processingTimeMs = Date.now() - startTime;
 
       const parsedData = {
@@ -351,6 +401,26 @@ class ResumeParserService {
       };
 
       await resumeRepository.updateParsedData(resumeId, parsedData);
+
+      // Generate embedding for semantic search
+      try {
+        const embeddingService = (await import('../embedding.service.js')).default;
+        const embedResult = await embeddingService.generateEmbeddingIfChanged(cleanedText, resume.embeddingHash, {
+          userId: resume.userId,
+          sourceType: 'Resume',
+          sourceId: resumeId
+        });
+        if (embedResult) {
+          await resumeRepository.updateById(resumeId, {
+            embedding: embedResult.embedding,
+            embeddingHash: embedResult.hash
+          });
+        }
+      } catch (embedError) {
+        console.error('[ResumeParserService] Failed to generate embeddings:', embedError.message);
+        // Do not fail the parse just because embeddings failed
+      }
+
       return parsedData;
 
     } catch (error) {

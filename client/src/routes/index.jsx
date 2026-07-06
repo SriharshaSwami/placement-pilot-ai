@@ -17,6 +17,8 @@ const Dashboard = React.lazy(() => import('../features/dashboard/pages/Dashboard
 const ResumeBuilder = React.lazy(() => import('../features/resume/pages/ResumeBuilder.jsx'));
 const ResumeDetails = React.lazy(() => import('../features/resume/pages/ResumeDetails.jsx'));
 const ResumeAnalysisDashboard = React.lazy(() => import('../features/ai/pages/ResumeAnalysisDashboard.jsx'));
+const ResumePreview = React.lazy(() => import('../features/resume-generator/pages/ResumePreview.jsx'));
+const ResumeRenderShell = React.lazy(() => import('../features/resume-generator/pages/ResumeRenderShell.jsx'));
 const JobBoard = React.lazy(() => import('../features/jobs/pages/JobBoard.jsx'));
 const TailoringDashboard = React.lazy(() => import('../features/tailoring/pages/TailoringDashboard.jsx'));
 const InterviewDashboard = React.lazy(() => import('../features/interview/pages/InterviewDashboard.jsx'));
@@ -34,6 +36,7 @@ const AnalyticsDashboard = React.lazy(() => import('../features/analytics/pages/
 const KnowledgeBase = React.lazy(() => import('../features/knowledge/pages/KnowledgeBase.jsx'));
 const MemoryDashboard = React.lazy(() => import('../features/memory/pages/MemoryDashboard.jsx'));
 const AIWorkspace = React.lazy(() => import('../features/agents/pages/AIWorkspace.jsx'));
+const SemanticSearch = React.lazy(() => import('../features/search/pages/SemanticSearch.jsx'));
 
 const SuspenseWrapper = ({ children }) => (
   <Suspense fallback={<LoadingSkeleton />}>
@@ -56,6 +59,7 @@ const router = createBrowserRouter([
           { path: '/register', element: <SuspenseWrapper><Register /></SuspenseWrapper> },
         ],
       },
+      { path: '/resume/render-shell', element: <SuspenseWrapper><ResumeRenderShell /></SuspenseWrapper> },
     ],
   },
   {
@@ -70,6 +74,7 @@ const router = createBrowserRouter([
           { path: '/resume', element: <SuspenseWrapper><ResumeBuilder /></SuspenseWrapper> },
           { path: '/resume/:id', element: <SuspenseWrapper><ResumeDetails /></SuspenseWrapper> },
           { path: '/resume/:id/analysis', element: <SuspenseWrapper><ResumeAnalysisDashboard /></SuspenseWrapper> },
+          { path: '/resume/:id/preview', element: <SuspenseWrapper><ResumePreview /></SuspenseWrapper> },
           { path: '/jobs', element: <SuspenseWrapper><JobBoard /></SuspenseWrapper> },
           { path: '/tailoring/job/:jobId', element: <SuspenseWrapper><TailoringDashboard /></SuspenseWrapper> },
           { path: '/interview', element: <SuspenseWrapper><InterviewDashboard /></SuspenseWrapper> },
@@ -87,7 +92,8 @@ const router = createBrowserRouter([
           { path: '/knowledge', element: <SuspenseWrapper><KnowledgeBase /></SuspenseWrapper> },
           { path: '/memory', element: <SuspenseWrapper><MemoryDashboard /></SuspenseWrapper> },
           { path: '/workspace', element: <SuspenseWrapper><AIWorkspace /></SuspenseWrapper> },
-          { path: '/ai', element: <SuspenseWrapper><AIWorkspace /></SuspenseWrapper> },      
+          { path: '/ai', element: <SuspenseWrapper><AIWorkspace /></SuspenseWrapper> },
+          { path: '/search', element: <SuspenseWrapper><SemanticSearch /></SuspenseWrapper> },      
         ],
       },
     ],

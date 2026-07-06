@@ -7,3 +7,7 @@ export const chatWithAgents = async (query) => {
 export const getExecutionHistory = async () => {
   return api.get('/agents/history');
 };
+
+export const clearExecutionHistory = async () => {
+  return api.delete('/agents/history');
+};

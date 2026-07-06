@@ -8,8 +8,8 @@ export const protect = asyncHandler(async (req, res, next) => {
   let token;
 
   // Check for token in cookies or Authorization header
-  if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
+  if (req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
   } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   }

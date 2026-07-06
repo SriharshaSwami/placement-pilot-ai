@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getJobs, createJob } from '@/services/job.service.js';
+import { getResumes } from '@/services/resume.service.js';
 import { PageHeader } from '@/components/ui/PageHeader.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
-import { Plus, Briefcase } from 'lucide-react';
+import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
+import { Plus, Briefcase, Zap } from 'lucide-react';
 import { classNames } from '@/utils/formatters.js';
 
 export default function JobBoard() {
@@ -11,9 +13,17 @@ export default function JobBoard() {
   const [isAdding, setIsAdding] = useState(false);
   const [newJob, setNewJob] = useState({ company: '', role: '', description: '' });
 
-  const { data: jobsResponse, isLoading } = useQuery({
-    queryKey: ['jobs'],
-    queryFn: getJobs,
+  const { data: resumesResponse, isLoading: isLoadingResumes } = useQuery({
+    queryKey: ['resumes'],
+    queryFn: getResumes,
+  });
+
+  const resumes = resumesResponse?.data || [];
+  const primaryResume = resumes.find(r => r.isPrimary) || resumes[0];
+
+  const { data: jobsResponse, isLoading: isLoadingJobs } = useQuery({
+    queryKey: ['jobs', primaryResume?._id],
+    queryFn: () => getJobs(primaryResume?._id),
   });
 
   const createMutation = useMutation({
@@ -31,6 +41,29 @@ export default function JobBoard() {
   };
 
   const jobs = jobsResponse?.data || [];
+  const isLoading = isLoadingJobs || isLoadingResumes;
+
+  const renderMatchBadge = (score) => {
+    if (score === undefined || score === null || score === 0) return null;
+    let color = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    let label = 'Analyzed';
+    if (score >= 0.7) {
+      color = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400';
+      label = 'Best Match';
+    } else if (score >= 0.5) {
+      color = 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-400';
+      label = 'Good Match';
+    } else {
+      color = 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400';
+      label = 'Weak Match';
+    }
+    return (
+      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${color}`}>
+        <Zap className="w-3 h-3 mr-1" />
+        {label}
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -103,8 +136,8 @@ export default function JobBoard() {
       )}
 
       {isLoading ? (
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3].map(i => <div key={i} className="h-32 bg-slate-200 dark:bg-slate-800 rounded-lg"></div>)}
+        <div className="space-y-4">
+          {[1, 2, 3].map(i => <LoadingSkeleton key={i} />)}
         </div>
       ) : jobs.length === 0 ? (
         <EmptyState
@@ -122,6 +155,7 @@ export default function JobBoard() {
                   <h4 className="text-lg font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 transition-colors">{job.role}</h4>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{job.company}</p>
                 </div>
+                {renderMatchBadge(job.similarityScore)}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {job.keywords?.slice(0, 5).map(kw => (

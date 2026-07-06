@@ -1,19 +1,31 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { chatWithAgents, getExecutionHistory } from '@/services/agent.service.js';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { chatWithAgents, getExecutionHistory, clearExecutionHistory } from '@/services/agent.service.js';
 import { PageHeader } from '@/components/ui/PageHeader.jsx';
-import { Send, Bot, Loader2, Workflow, Clock, Activity, AlertCircle } from 'lucide-react';
+import { Send, Bot, Loader2, Workflow, Clock, Activity, AlertCircle, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
 
 export default function AIWorkspace() {
   const [query, setQuery] = useState('');
   const [messages, setMessages] = useState([]);
+  const queryClient = useQueryClient();
 
-  // Fetch past orchestration executions
   const { data: historyRes } = useQuery({
     queryKey: ['agentHistory'],
     queryFn: () => getExecutionHistory()
+  });
+
+  const clearHistoryMutation = useMutation({
+    mutationFn: () => clearExecutionHistory(),
+    onSuccess: () => {
+      setMessages([]);
+      queryClient.invalidateQueries({ queryKey: ['agentHistory'] });
+      toast.success('Chat history cleared.');
+    },
+    onError: () => {
+      toast.error('Failed to clear chat history.');
+    }
   });
 
   const chatMutation = useMutation({
@@ -26,8 +38,13 @@ export default function AIWorkspace() {
         metadata: response.metadata
       }]);
     },
-    onError: () => {
+    onError: (error) => {
       toast.error('Agent execution failed.');
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: 'I encountered an error processing your request. Please try again.',
+        metadata: { error: true }
+      }]);
     }
   });
 
@@ -47,8 +64,24 @@ export default function AIWorkspace() {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden mt-6">
         
         {/* Main Chat Area */}
-        <div className="lg:col-span-2 flex flex-col bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="lg:col-span-2 flex flex-col bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm relative">
+          
+          {/* Chat Header / Actions */}
+          {messages.length > 0 && (
+            <div className="absolute top-4 right-4 z-10">
+              <button 
+                onClick={() => clearHistoryMutation.mutate()}
+                disabled={clearHistoryMutation.isPending}
+                className="flex items-center text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-500 hover:border-red-200 px-3 py-1.5 rounded-full shadow-sm transition-colors disabled:opacity-50"
+                title="Clear Chat"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                {clearHistoryMutation.isPending ? 'Clearing...' : 'New Chat'}
+              </button>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 pt-16">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-slate-500">
                 <Workflow className="w-16 h-16 mb-4 text-slate-300" />
@@ -65,7 +98,16 @@ export default function AIWorkspace() {
                   <div className="flex flex-wrap gap-2 mb-2 ml-1">
                     <span className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-full bg-blue-100 text-blue-700 border border-blue-200">Intent: {msg.metadata.intent}</span>
                     <span className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-full bg-purple-100 text-purple-700 border border-purple-200">Agents: {msg.metadata.agentsUsed?.join(' → ')}</span>
-                    <span className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center"><Clock className="w-3 h-3 mr-1"/> {msg.metadata.latencyMs}ms</span>
+                    {msg.metadata.source && (
+                      <span className={`px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-full border ${
+                        msg.metadata.source === 'Cached Response' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                        msg.metadata.source === 'Gemini AI' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' :
+                        'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      }`}>
+                        Source: {msg.metadata.source}
+                      </span>
+                    )}
+                    <span className="px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center"><Clock className="w-3 h-3 mr-1"/> {msg.metadata.latencyMs || '< 100'}ms</span>
                   </div>
                 )}
                 

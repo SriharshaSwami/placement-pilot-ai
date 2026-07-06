@@ -22,6 +22,20 @@ class ResumeRepository {
     return Resume.countDocuments({ userId, deletedAt: null });
   }
 
+  async findVersions(parentId, userId) {
+    return Resume.find({
+      userId,
+      deletedAt: null,
+      $or: [{ _id: parentId }, { parentResumeId: parentId }]
+    })
+      .sort({ createdAt: -1 })
+      .populate('jobId', 'company title');
+  }
+
+  async count(query) {
+    return Resume.countDocuments({ ...query, deletedAt: null });
+  }
+
   async countPrimaryByUserId(userId) {
     return Resume.countDocuments({ userId, isPrimary: true, deletedAt: null });
   }

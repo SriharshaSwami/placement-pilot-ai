@@ -1,31 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Timer as TimerIcon, AlertCircle } from 'lucide-react';
 
 export default function Timer({ startTime, durationMinutes, onTimeUp }) {
   const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
+  const onTimeUpRef = useRef(onTimeUp);
+  const timeUpTriggered = useRef(false);
+
+  useEffect(() => {
+    onTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
 
   useEffect(() => {
     if (!startTime) return;
     
-    const calculateTimeLeft = () => {
-      const startMs = new Date(startTime).getTime();
+    const startMs = new Date(startTime).getTime();
+    const totalSeconds = durationMinutes * 60;
+
+    const checkTime = () => {
       const nowMs = Date.now();
       const elapsedSeconds = Math.floor((nowMs - startMs) / 1000);
-      const totalSeconds = durationMinutes * 60;
       const remaining = Math.max(0, totalSeconds - elapsedSeconds);
       
       setTimeLeft(remaining);
       
-      if (remaining === 0 && onTimeUp) {
-        onTimeUp();
+      if (remaining === 0 && !timeUpTriggered.current) {
+        timeUpTriggered.current = true;
+        if (onTimeUpRef.current) onTimeUpRef.current();
       }
+      
+      return remaining;
     };
 
-    calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 1000);
+    const initialRemaining = checkTime();
+    if (initialRemaining === 0) return;
+
+    const interval = setInterval(() => {
+      const rem = checkTime();
+      if (rem === 0) clearInterval(interval);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [startTime, durationMinutes, onTimeUp]);
+  }, [startTime, durationMinutes]);
 
   const formatTime = (secs) => {
     const m = Math.floor(secs / 60);

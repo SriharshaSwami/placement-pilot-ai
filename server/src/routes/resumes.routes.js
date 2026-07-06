@@ -8,6 +8,12 @@ import {
   setPrimaryResume,
   deleteResume,
   parseResume,
+  getVersions,
+  restoreVersion,
+  generatePdf,
+  updateTemplate,
+  saveManualEdits,
+  updateResumeData,
 } from '../controllers/resumes.controller.js';
 import { protect } from '../middleware/authMiddleware.js';
 import CustomError from '../errors/CustomError.js';
@@ -42,5 +48,12 @@ router.patch('/:id', renameResume);
 router.patch('/:id/primary', setPrimaryResume);
 router.delete('/:id', deleteResume);
 router.post('/:id/parse', parseResume);
+router.get('/:id/pdf', generatePdf);
+router.patch('/:id/template', updateTemplate);
+
+router.get('/:id/versions', getVersions);
+router.post('/:id/restore', restoreVersion);
+router.post('/:id/save-edits', saveManualEdits);
+router.patch('/:id/data', updateResumeData);
 
 export default router;

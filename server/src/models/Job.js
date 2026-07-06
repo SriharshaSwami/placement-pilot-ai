@@ -25,6 +25,15 @@ const jobSchema = new mongoose.Schema({
   preferredSkills: [String],
   keywords: [String],
   
+  embedding: {
+    type: [Number],
+    default: null,
+  },
+  embeddingHash: {
+    type: String,
+    default: null,
+  },
+
   isArchived: { type: Boolean, default: false },
   isFavorite: { type: Boolean, default: false },
 }, {

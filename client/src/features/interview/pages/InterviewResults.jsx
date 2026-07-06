@@ -52,7 +52,7 @@ export default function InterviewResults() {
         
         <div className="lg:col-span-2 space-y-8">
            <div className="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm h-full">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Coach's Summary</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Coach&apos;s Summary</h3>
             <p className="text-slate-600 dark:text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">
               {summary.overallPerformance}
             </p>
@@ -81,7 +81,7 @@ export default function InterviewResults() {
         <AnalysisSection title="Missed Opportunities" icon={Lightbulb} items={summary.missedOpportunities} />
       </div>
 
-      <Suspense fallback={<div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>}>
+      <Suspense fallback={<div className="mt-12"><LoadingSkeleton /></div>}>
         <div className="mt-12 mb-8">
           <RadarChartMetrics summary={summary} />
         </div>

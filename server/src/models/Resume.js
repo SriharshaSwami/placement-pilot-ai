@@ -36,6 +36,20 @@ const resumeSchema = new mongoose.Schema(
       type: Number,
       default: 1,
     },
+    parentResumeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Resume',
+      default: null,
+    },
+    jobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Job',
+      default: null,
+    },
+    tailoringSummary: {
+      type: String,
+      default: '',
+    },
     isPrimary: {
       type: Boolean,
       default: false,
@@ -56,6 +70,10 @@ const resumeSchema = new mongoose.Schema(
           github: { value: String, confidence: Number },
           portfolio: { value: String, confidence: Number },
           location: { value: String, confidence: Number },
+          links: [{
+            name: { type: String },
+            url: { type: String }
+          }],
         },
         professionalSummary: { value: String, confidence: Number },
         skills: {
@@ -138,7 +156,13 @@ const resumeSchema = new mongoose.Schema(
         languagesSpoken: [{
           language: { value: String, confidence: Number },
           proficiency: { value: String, confidence: Number }
-        }]
+        }],
+        layout: {
+          sectionOrder: {
+            type: [String],
+            default: ['summary', 'experience', 'education', 'projects', 'skills', 'certifications', 'achievements', 'links']
+          }
+        }
       },
       metadata: {
         parsingStatus: {
@@ -163,6 +187,19 @@ const resumeSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'completed', 'failed'],
       default: 'completed',
+    },
+    selectedTemplate: {
+      type: String,
+      enum: ['classic', 'modern', 'minimal', 'professional'],
+      default: 'classic',
+    },
+    embedding: {
+      type: [Number],
+      default: null,
+    },
+    embeddingHash: {
+      type: String,
+      default: null,
     },
     deletedAt: {
       type: Date,

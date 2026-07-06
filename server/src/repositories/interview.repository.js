@@ -23,6 +23,22 @@ class InterviewRepository {
       .populate('resumeId')
       .populate('jobId');
   }
+
+  async archiveStaleSessions(userId) {
+    // 2 hours threshold
+    const staleThreshold = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    return InterviewSession.updateMany(
+      { userId, status: 'InProgress', updatedAt: { $lt: staleThreshold } },
+      { $set: { status: 'Archived' } }
+    );
+  }
+
+  async archiveAllActiveSessions(userId) {
+    return InterviewSession.updateMany(
+      { userId, status: 'InProgress' },
+      { $set: { status: 'Archived' } }
+    );
+  }
 }
 
 export default new InterviewRepository();

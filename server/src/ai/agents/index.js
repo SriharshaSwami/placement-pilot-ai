@@ -1,6 +1,7 @@
 import BaseAgent from './BaseAgent.js';
 import geminiAdapter from '../adapters/gemini.adapter.js';
 import { PromptBuilder } from '../utils/promptBuilder.js';
+import { aiCache } from '../utils/aiCache.js';
 
 class GenericDomainAgent extends BaseAgent {
   constructor(name, description, roleSystemPrompt) {
@@ -8,21 +9,41 @@ class GenericDomainAgent extends BaseAgent {
     this.roleSystemPrompt = roleSystemPrompt;
   }
 
-  async execute(query, context) {
+  async execute(query, context = {}, requiresAi = true, userId) {
+    // 1. Context check: Check if required context was provided but failed
+    if (this.name === 'ResumeAgent') {
+      if (context.resume && context.resume.message === 'No resume found.') {
+        return {
+          reply: "I noticed you haven't uploaded a resume yet. Please upload your resume in the dashboard so I can assist you better!",
+          source: 'Internal Data'
+        };
+      }
+    }
+
+    // 2. Decision Engine: Check if AI is required
+    if (!requiresAi) {
+      return {
+        reply: `Data retrieved successfully by ${this.name}:\n\n${JSON.stringify(context, null, 2)}`,
+        source: 'Internal Data'
+      };
+    }
+
+    // 3. Check Cache before calling Gemini
+    const cacheKey = aiCache.generateKey(this.name, query, context);
+    const cachedResponse = await aiCache.get(cacheKey);
+    
+    if (cachedResponse) {
+      return {
+        reply: cachedResponse,
+        source: 'Cached Response'
+      };
+    }
+
+    // 4. Gemini: Reason over the data
     const builder = new PromptBuilder(this.roleSystemPrompt);
     
-    // Inject Multi-Agent Context securely
-    builder.setContext(`
-      --- KNOWLEDGE BASE (RAG) ---
-      ${context.ragContext || 'None'}
-      
-      --- SEMANTIC MEMORY ---
-      ${context.memoryContext || 'None'}
-      
-      --- PREVIOUS AGENT OUTPUT ---
-      ${context.previousAgentOutput || 'None'}
-    `.trim());
-
+    // Inject Multi-Agent Context securely and dynamically
+    builder.setAgentContext(this.name, context);
     builder.setTask(`User Query: ${query}`);
 
     // Since these are conversational outputs (not strict JSON data extraction), we use standard text generation
@@ -31,7 +52,13 @@ class GenericDomainAgent extends BaseAgent {
       builder.getSystemInstruction()
     );
 
-    return responseText;
+    // 5. Save the generated response to cache
+    await aiCache.set(cacheKey, responseText);
+
+    return {
+      reply: responseText,
+      source: 'Gemini AI'
+    };
   }
 }
 

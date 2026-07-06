@@ -3,6 +3,7 @@ import { getMemories, deleteMemory, resetMemories, exportMemories } from '@/serv
 import { PageHeader } from '@/components/ui/PageHeader.jsx';
 import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
 import { MemoryCard } from '../components/MemoryCard.jsx';
+import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { BrainCircuit, Download, Trash2, ShieldCheck, DatabaseZap } from 'lucide-react';
 import { useModal } from '@/contexts/ModalContext.jsx';
 import toast from 'react-hot-toast';
@@ -76,7 +77,7 @@ export default function MemoryDashboard() {
         <PageHeader title="Semantic Memory Engine" description="Long-term facts the AI has learned about you across all your interactions." />
         
         <div className="flex space-x-3">
-          <button onClick={handleExport} className="flex items-center px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">
+          <button onClick={handleExport} className="flex items-center px-4 py-2 bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">
             <Download className="w-4 h-4 mr-2" /> Export JSON
           </button>
           <button 
@@ -107,11 +108,11 @@ export default function MemoryDashboard() {
         <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Your Semantic Profile</h3>
         
         {memories.length === 0 ? (
-          <div className="text-center py-20 bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl">
-            <BrainCircuit className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Blank Slate</h2>
-            <p className="text-slate-500">The AI hasn&apos;t learned any long-term facts about you yet. Complete interviews or roadmaps to build memory.</p>
-          </div>
+          <EmptyState
+            icon={BrainCircuit}
+            title="Blank Slate"
+            description="The AI hasn't learned any long-term facts about you yet. Complete interviews or roadmaps to build memory."
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {memories.map(mem => (

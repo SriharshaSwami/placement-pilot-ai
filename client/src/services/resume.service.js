@@ -36,3 +36,27 @@ export const deleteResume = async (id) => {
 export const parseResume = async (id) => {
   return api.post(`/resumes/${id}/parse`);
 };
+
+export const getResumeVersions = async (id) => {
+  return api.get(`/resumes/${id}/versions`);
+};
+
+export const restoreResumeVersion = async (resumeId, versionId) => {
+  const response = await api.post(`/resumes/${resumeId}/restore`, { versionId });
+  return response.data;
+};
+
+export const updateResumeTemplate = async (resumeId, templateId) => {
+  const response = await api.patch(`/resumes/${resumeId}/template`, { templateId });
+  return response.data;
+};
+
+export const saveManualEdits = async (resumeId, structuredData) => {
+  const response = await api.post(`/resumes/${resumeId}/save-edits`, { structuredData });
+  return response.data;
+};
+
+export const patchResumeData = async (resumeId, structuredData) => {
+  const response = await api.patch(`/resumes/${resumeId}/data`, { structuredData });
+  return response.data;
+};

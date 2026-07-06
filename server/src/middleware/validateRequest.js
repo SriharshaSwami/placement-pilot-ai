@@ -10,8 +10,8 @@ const validateRequest = (schema) => async (req, res, next) => {
     return next();
   } catch (error) {
     if (error.name === 'ZodError') {
-      const messages = error.errors.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
-      return next(new CustomError(messages, 422, 'VALIDATION_ERROR', error.errors));
+      const messages = error.issues.map((err) => `${err.path.join('.')}: ${err.message}`).join(', ');
+      return next(new CustomError(messages, 422, 'VALIDATION_ERROR', error.issues));
     }
     return next(error);
   }

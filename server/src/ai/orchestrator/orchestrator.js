@@ -1,92 +1,76 @@
-import intentClassifier from './intentClassifier.js';
+import logger from '../../utils/logger.js';
+import { decisionEngine } from './decisionEngine.js';
 import agentRegistry from './agentRegistry.js';
-import memoryService from '../../services/memory.service.js';
-import retriever from '../rag/retriever.js';
-import { ContextBuilder } from '../rag/contextBuilder.js';
-import AgentExecution from '../../models/AgentExecution.js';
+import { contextBuilder } from './contextBuilder.js';
 
 class Orchestrator {
+  /**
+   * Determine the user's intent using lightweight rule-based intent detection.
+   */
+  detectIntent(query) {
+    const text = query.toLowerCase();
+    
+    if (text.includes('resume') || text.includes('cv') || text.includes('cover letter')) {
+      return { agent: 'Resume', action: 'tailor_or_review' };
+    }
+    
+    if (text.includes('interview') || text.includes('mock') || text.includes('questions')) {
+      return { agent: 'Interview', action: 'practice_or_prep' };
+    }
+    
+    if (text.includes('job') || text.includes('application') || text.includes('apply') || text.includes('role')) {
+      return { agent: 'Job', action: 'search_or_track' };
+    }
+    
+    if (text.includes('code') || text.includes('coding') || text.includes('algorithm') || text.includes('leetcode')) {
+      return { agent: 'Coding', action: 'practice_or_debug' };
+    }
+    
+    if (text.includes('career') || text.includes('path') || text.includes('roadmap') || text.includes('skills')) {
+      return { agent: 'Career', action: 'plan_or_advise' };
+    }
+    
+    // Default fallback
+    return { agent: 'Career', action: 'general_advice' };
+  }
+
   async handleQuery(userId, query) {
-    const startTime = Date.now();
-    let executionRecord = {
-      userId,
-      query,
-      intent: 'UNKNOWN',
-      agentsUsed: [],
-      status: 'Failed'
+    logger.info(`[Orchestrator] Received query from user ${userId}: "${query}"`);
+
+    // 1. Determine Intent
+    const { agent, action } = this.detectIntent(query);
+    
+    logger.info(`[Orchestrator] Intent detected -> Selected Agent: ${agent}, Action: ${action}`);
+
+    // 2. Decide if AI is required
+    const requiresAi = decisionEngine.requiresAi(query);
+
+    // 3. Build Context using Context Builder
+    const context = await contextBuilder.buildContext(userId, agent, action, query);
+
+    // 4. Execute the selected Agent
+    const targetAgent = agentRegistry.getAgent(`${agent}Agent`);
+    let agentResult = { reply: '', source: 'Unknown' };
+    
+    if (targetAgent) {
+      // Execute the agent, passing requiresAi and userId
+      agentResult = await targetAgent.execute(query, context, requiresAi, userId);
+    } else {
+      agentResult.reply = `I'm sorry, the ${agent} Agent is currently unavailable.`;
+    }
+
+    // 4. Return the response
+    const response = {
+      reply: agentResult.reply,
+      metadata: {
+        intent: action,
+        agentsUsed: [`${agent}Agent`],
+        requiresAi: requiresAi,
+        source: agentResult.source
+      }
     };
 
-    try {
-      // 1. Detect Intent & Select Agents
-      const classification = await intentClassifier.classify(query);
-      executionRecord.intent = classification.intent;
-      executionRecord.agentsUsed = classification.suggestedAgents;
-
-      if (!classification.suggestedAgents || classification.suggestedAgents.length === 0) {
-        throw new Error('No agents suggested by classifier.');
-      }
-
-      // 2. Build Multi-Modal Context (RAG + Semantic Memory)
-      // We retrieve RAG chunks related to the query
-      const ragChunks = await retriever.retrieve(query, userId, 5);
-      const ragContext = ContextBuilder.buildContextString(ragChunks);
-
-      // We retrieve all active semantic memory facts
-      const memories = await memoryService.getAllMemories(userId);
-      const memoryContext = memories.map(m => `- [${m.category}] ${m.fact} (Confidence: ${m.confidence}/10)`).join('\n');
-
-      const sharedContext = {
-        ragContext,
-        memoryContext,
-        previousAgentOutput: null
-      };
-
-      // 3. Sequential Multi-Agent Execution
-      let finalOutput = '';
-      let currentQuery = query;
-
-      for (const agentName of classification.suggestedAgents) {
-        const agent = agentRegistry.getAgent(agentName);
-        if (!agent) {
-          console.warn(`[Orchestrator] Requested agent ${agentName} not found in registry. Skipping.`);
-          continue;
-        }
-
-        // Execute the agent. If it's the second agent in the chain, it gets the output of the first agent as context.
-        const output = await agent.execute(currentQuery, sharedContext);
-        
-        sharedContext.previousAgentOutput = output; // Pass chain
-        finalOutput = output; // The final agent's output is what the user sees
-      }
-
-      // 4. Log Observability Metrics
-      const latencyMs = Date.now() - startTime;
-      executionRecord.result = finalOutput;
-      executionRecord.latencyMs = latencyMs;
-      executionRecord.status = 'Success';
-      
-      await AgentExecution.create(executionRecord);
-
-      return {
-        reply: finalOutput,
-        metadata: {
-          intent: classification.intent,
-          agentsUsed: classification.suggestedAgents,
-          latencyMs
-        }
-      };
-
-    } catch (error) {
-      console.error('Orchestrator Error:', error);
-      executionRecord.errorMessage = error.message;
-      executionRecord.latencyMs = Date.now() - startTime;
-      await AgentExecution.create(executionRecord);
-      
-      return {
-        reply: "I'm sorry, I encountered an internal error while processing your request. My diagnostic logs have been updated.",
-        metadata: { error: true }
-      };
-    }
+    return response;
   }
 }
 

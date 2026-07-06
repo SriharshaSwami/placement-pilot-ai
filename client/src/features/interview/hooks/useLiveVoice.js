@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import liveVoiceService from '../../../../services/liveVoice.service.js';
+import liveVoiceService from '../../../services/liveVoice.service.js';
 
 export function useLiveVoice(interviewId, userId) {
   const [state, setState] = useState('Disconnected');

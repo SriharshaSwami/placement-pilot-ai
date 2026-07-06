@@ -1,5 +1,5 @@
 import express from 'express';
-import { getAnalyticsDashboard } from '../controllers/analytics.controller.js';
+import { getAnalyticsDashboard, getRecommendations } from '../controllers/analytics.controller.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -7,5 +7,6 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/', getAnalyticsDashboard);
+router.get('/recommendations', getRecommendations);
 
 export default router;

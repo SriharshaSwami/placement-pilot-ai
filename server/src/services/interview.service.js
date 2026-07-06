@@ -12,6 +12,7 @@ import { interviewQuestionSchema } from '../ai/schemas/interviewQuestion.schema.
 import { interviewEvaluationSchema } from '../ai/schemas/interviewEvaluation.schema.js';
 import { interviewSummarySchema } from '../ai/schemas/interviewSummary.schema.js';
 import coachingService from './coaching.service.js';
+import embeddingService from './embedding.service.js';
 
 class InterviewService {
   async createSession(userId, configData) {
@@ -26,6 +27,10 @@ class InterviewService {
       const job = await jobRepository.findById(jobId);
       if (!job || job.userId.toString() !== userId.toString()) throw new CustomError('Job not found', 404);
     }
+
+    // A user can only have one active interview session at a time.
+    // Clean up/archive any existing active sessions before starting a new one.
+    await interviewRepository.archiveAllActiveSessions(userId);
 
     const session = await interviewRepository.createSession({
       userId,
@@ -49,6 +54,8 @@ class InterviewService {
   }
 
   async listSessions(userId) {
+    // Automatically archive any stale sessions (e.g. abandoned midway) before returning list
+    await interviewRepository.archiveStaleSessions(userId);
     return interviewRepository.findByUserId(userId);
   }
 
@@ -78,12 +85,30 @@ class InterviewService {
       }
     }
 
+    // Optional: Calculate embedding similarity
+    let similarityScore = null;
+    const resumeDoc = session.resumeId;
+    const jobDoc = session.jobId;
+    if (resumeDoc?.embedding && jobDoc?.embedding) {
+      try {
+        const embeddingService = (await import('./embedding.service.js')).default;
+        similarityScore = embeddingService.calculateSimilarity(resumeDoc.embedding, jobDoc.embedding);
+      } catch (err) {
+        console.error('[InterviewService] Failed to calculate similarity:', err.message);
+      }
+    }
+
     const promptBuilder = buildQuestionPrompt(adaptiveConfig, parsedResume, parsedJob, session.questions);
     
+    let systemInstruction = promptBuilder.getSystemInstruction();
+    if (similarityScore !== null) {
+      systemInstruction += `\n\nContext: The semantic similarity between the candidate's resume and this job is ${(similarityScore * 100).toFixed(1)}%. Use this context to determine how much to challenge them on skill gaps versus deep-diving into matched skills.`;
+    }
+
     const { parsedJSON } = await geminiAdapter.generateStructuredJSON(
       promptBuilder.buildContent(),
       interviewQuestionSchema,
-      promptBuilder.getSystemInstruction()
+      systemInstruction
     );
 
     validateSchema(parsedJSON, interviewQuestionSchema.required);
@@ -154,10 +179,25 @@ class InterviewService {
 
     validateSchema(parsedJSON, interviewSummarySchema.required);
 
-    const updatedSession = await interviewRepository.updateSession(sessionId, {
+    // Generate semantic embedding of the summary
+    const summaryText = JSON.stringify(parsedJSON);
+    const embeddingData = await embeddingService.generateEmbeddingIfChanged(summaryText, session.embeddingHash, {
+      userId,
+      sourceType: 'Interview',
+      sourceId: sessionId
+    });
+
+    const updatePayload = {
       status: 'Completed',
       summary: parsedJSON
-    });
+    };
+
+    if (embeddingData) {
+      updatePayload.embedding = embeddingData.embedding;
+      updatePayload.embeddingHash = embeddingData.hash;
+    }
+
+    const updatedSession = await interviewRepository.updateSession(sessionId, updatePayload);
 
     // Run deep coaching analysis asynchronously (fire-and-forget for now, or await if preferred)
     coachingService.generateCoachingReport(updatedSession).catch(err => {

@@ -92,8 +92,8 @@ class AiRequestManager {
     return requestPromise;
   }
 
-  async generateContent(promptText, model = this.modelName) {
-    const requestHash = this._generateHash(promptText, null, null, model);
+  async generateContent(promptText, systemInstruction = null, model = this.modelName) {
+    const requestHash = this._generateHash(promptText, null, systemInstruction, model);
     
     if (this.inFlightRequests.has(requestHash)) {
       return this.inFlightRequests.get(requestHash);
@@ -101,8 +101,34 @@ class AiRequestManager {
 
     const requestPromise = this._executeWithRetry(async () => {
       const startTime = Date.now();
-      const result = await geminiClient.generateContent(promptText, model);
+      const result = await geminiClient.generateContent(promptText, systemInstruction, model);
       logger.info(`[AiRequestManager] API SUCCESS [text-gen] - Latency: ${Date.now() - startTime}ms`);
+      return result;
+    }, 3).finally(() => {
+      this.inFlightRequests.delete(requestHash);
+    });
+
+    this.inFlightRequests.set(requestHash, requestPromise);
+    return requestPromise;
+  }
+
+  async generateEmbeddings(text) {
+    const requestHash = crypto.createHash('sha256').update(text).digest('hex');
+    
+    if (this.cache.has(requestHash)) {
+      return this.cache.get(requestHash).response;
+    }
+
+    if (this.inFlightRequests.has(requestHash)) {
+      return this.inFlightRequests.get(requestHash);
+    }
+
+    const requestPromise = this._executeWithRetry(async () => {
+      const startTime = Date.now();
+      const result = await geminiClient.generateEmbeddings(text);
+      logger.info(`[AiRequestManager] API SUCCESS [embeddings] - Latency: ${Date.now() - startTime}ms`);
+      
+      this.cache.set(requestHash, { response: result, timestamp: Date.now() });
       return result;
     }, 3).finally(() => {
       this.inFlightRequests.delete(requestHash);
