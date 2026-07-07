@@ -1,7 +1,7 @@
 import api from '../lib/axios.js';
 
-export const initiateTailoring = async (jobId, resumeId) => {
-  return api.post('/tailoring', { jobId, resumeId });
+export const initiateTailoring = async (jobId, resumeId, forceRegenerate = false) => {
+  return api.post('/tailoring', { jobId, resumeId, forceRegenerate });
 };
 
 export const getSession = async (sessionId) => {

@@ -14,8 +14,8 @@ export const ProfessionalTemplate = ({ data }) => {
   if (!data) return null;
 
   return (
-    <div className="bg-white w-full max-w-[850px] shadow-lg print:shadow-none print:max-w-none mx-auto text-slate-900 font-sans border-l-[16px] border-slate-800" style={{ minHeight: '1100px' }}>
-      <div className="p-8 space-y-5">
+    <div className="bg-white w-full max-w-[850px] shadow-lg print:shadow-none print:max-w-none mx-auto text-slate-900 font-sans border-l-[16px] border-slate-800 min-h-[1100px] print:min-h-0">
+      <div className="p-8 print:px-8 print:py-0 space-y-5">
         <Header data={data.candidate} />
         
         {data.professionalSummary?.value && (

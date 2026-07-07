@@ -9,9 +9,25 @@ import jobRepository from '../repositories/job.repository.js';
 import CustomError from '../errors/CustomError.js';
 
 class TailoringService {
-  async generateTailoringSession(userId, jobId, resumeId) {
+  hasStructuredContent(structuredData) {
+    if (!structuredData) return false;
+    if (structuredData.professionalSummary?.value) return true;
+    if (structuredData.experience && structuredData.experience.length > 0) return true;
+    if (structuredData.education && structuredData.education.length > 0) return true;
+    if (structuredData.projects && structuredData.projects.length > 0) return true;
+    if (structuredData.skills) {
+      for (const category of Object.values(structuredData.skills)) {
+        if (Array.isArray(category) && category.length > 0) return true;
+      }
+    }
+    return false;
+  }
+
+  async generateTailoringSession(userId, jobId, resumeId, forceRegenerate = false) {
+    console.log(`[TailoringService] generateTailoringSession called for Job: ${jobId}, Resume: ${resumeId}, ForceRegenerate: ${forceRegenerate}`);
     // 1. Verify ownership
     const resume = await resumeRepository.findById(resumeId);
+    console.log(`[TailoringService] Fetched resume: ${resume ? resume.title : 'NOT FOUND'}`);
     if (!resume || resume.userId.toString() !== userId.toString()) {
       throw new CustomError('Resume not found', 404, 'NOT_FOUND');
     }
@@ -19,9 +35,34 @@ class TailoringService {
       throw new CustomError('Resume must be parsed first', 400, 'NOT_PARSED');
     }
 
-    if (!resume.parsedData.structuredData) {
+    if (resume.parsedData?.metadata?.parsingStatus !== 'success') {
+      throw new CustomError('Resume parsing was not successful. Please re-parse the resume.', 400, 'NOT_PARSED');
+    }
+
+    const sections = resume.parsedData?.sections;
+    let hasContent = false;
+    if (sections) {
+      // Handle both Mongoose Map and standard Object
+      const values = typeof sections.values === 'function' ? Array.from(sections.values()) : Object.values(sections);
+      hasContent = values.some(text => typeof text === 'string' && text.trim().length > 0);
+    }
+    
+    if (!hasContent) {
+       throw new CustomError('Resume is empty or contains no parsed sections.', 400, 'EMPTY_RESUME');
+    }
+
+    console.log(`[TailoringService] Validating structuredData...`);
+    const isStructuredPopulated = this.hasStructuredContent(resume.parsedData.structuredData);
+    if (!isStructuredPopulated) {
+      console.log(`[TailoringService] structuredData is an empty shell. Attempting to parse...`);
       const resumeParserService = (await import('./parser/resumeParser.service.js')).default;
       resume.parsedData = await resumeParserService.createStructuredResume(resumeId);
+      
+      if (!this.hasStructuredContent(resume.parsedData.structuredData)) {
+         throw new CustomError('Failed to extract structured data from resume.', 400, 'EMPTY_RESUME');
+      }
+    } else {
+      console.log(`[TailoringService] structuredData is valid and populated.`);
     }
 
     const job = await jobRepository.findById(jobId);
@@ -30,16 +71,22 @@ class TailoringService {
     }
 
     // 2. Check cache (active session)
-    const existingSession = await TailoringSession.findOne({ userId, jobId, resumeId });
-    if (existingSession) {
-      return existingSession;
+    if (!forceRegenerate) {
+      const existingSession = await TailoringSession.findOne({ userId, jobId, resumeId });
+      if (existingSession) {
+        console.log(`[TailoringService] Returning cached session: ${existingSession._id}`);
+        return existingSession;
+      }
+    } else {
+      console.log(`[TailoringService] forceRegenerate is true. Deleting existing session...`);
+      await TailoringSession.findOneAndDelete({ userId, jobId, resumeId });
     }
 
     // Optional: Calculate embedding similarity
     let similarityScore = null;
     if (resume.embedding && job.embedding) {
       try {
-        const embeddingService = (await import('../embedding.service.js')).default;
+        const embeddingService = (await import('./embedding.service.js')).default;
         similarityScore = embeddingService.calculateSimilarity(resume.embedding, job.embedding);
       } catch (err) {
         console.error('[TailoringService] Failed to calculate similarity:', err.message);
@@ -56,6 +103,8 @@ class TailoringService {
     }
 
     const promptContent = promptBuilder.buildContent();
+    console.log(`[TailoringService] Final Prompt Payload Length: ${promptContent.length} chars`);
+    console.log(`[TailoringService] Prompt Payload Preview: ${promptContent.substring(0, 200)}...`);
 
     let parsedJSON;
     let attempts = 0;
@@ -102,17 +151,57 @@ class TailoringService {
 
             // Clamp confidence between 50 and 98 to make it look realistic and not generic
             sug.confidence = Math.max(50, Math.min(98, Math.round(conf)));
+
+            // Populate originalContent deterministically using targetPath
+            if (!sug.originalContent && resume.parsedData?.structuredData) {
+              try {
+                const targetPath = sug.targetPath;
+                if (targetPath) {
+                  const val = targetPath.split('.').reduce((acc, part) => acc && acc[part], resume.parsedData.structuredData);
+                  
+                  if (Array.isArray(val)) {
+                    sug.originalContent = val.map(v => typeof v === 'object' ? v.value || '' : v).join(', ');
+                  } else if (val && typeof val === 'object' && val.value) {
+                    sug.originalContent = val.value;
+                  } else if (typeof val === 'string') {
+                    sug.originalContent = val;
+                  } else {
+                    sug.originalContent = '';
+                  }
+                }
+              } catch (e) {
+                sug.originalContent = '';
+              }
+            }
+
+            // Fix suggestedContent if AI returned a stringified JSON array
+            if (sug.suggestedContent && sug.suggestedContent.trim().startsWith('[')) {
+              try {
+                const parsedSug = JSON.parse(sug.suggestedContent);
+                if (Array.isArray(parsedSug)) {
+                  sug.suggestedContent = parsedSug.map(v => typeof v === 'object' ? v.value || '' : v).join(', ');
+                }
+              } catch (e) {
+                // Ignore parse errors, it's just a regular string that happens to start with [
+              }
+            }
           });
         }
         break;
       } catch (error) {
         console.warn(`[TailoringService] Attempt ${attempts} failed: ${error.message}`);
         if (attempts >= maxAttempts) {
-          throw new CustomError(
-            `Failed to generate valid tailoring suggestions after ${maxAttempts} attempts: ${error.message}`,
-            500,
-            'AI_VALIDATION_ERROR'
-          );
+          // Parse the raw error to give a clean message to the client
+          const raw = error.message || '';
+          let clientMsg;
+          if (raw.includes('503') || raw.toLowerCase().includes('unavailable') || raw.toLowerCase().includes('high demand')) {
+            clientMsg = 'The AI service is temporarily overloaded. Please try again in a few moments.';
+          } else if (raw.toLowerCase().includes('timeout')) {
+            clientMsg = 'The AI request timed out. Please try again.';
+          } else {
+            clientMsg = `Failed to generate tailoring suggestions after ${maxAttempts} attempts. Please try again.`;
+          }
+          throw new CustomError(clientMsg, 503, 'AI_UNAVAILABLE');
         }
       }
     }

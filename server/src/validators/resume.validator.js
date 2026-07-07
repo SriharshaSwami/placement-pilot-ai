@@ -9,6 +9,12 @@ const ConfidenceString = z.object({
   confidence: z.number().min(0).max(1).optional()
 }).nullable().optional();
 
+const ConfidenceStringWithName = z.object({
+  value: z.string().nullable().optional(),
+  name: ConfidenceString,
+  confidence: z.number().min(0).max(1).optional()
+}).nullable().optional();
+
 const ConfidenceStringArray = z.array(
   z.object({
     value: z.string().nullable().optional(),
@@ -29,16 +35,17 @@ export const resumeParserSchema = z.object({
 
   professionalSummary: ConfidenceString,
 
+  // Skills: AI returns a flat list (skills.extracted) which the server classifies into these 8 buckets before Zod validation.
   skills: z.object({
-    languages: ConfidenceStringArray,
-    frameworks: ConfidenceStringArray,
-    libraries: ConfidenceStringArray,
-    databases: ConfidenceStringArray,
-    cloud: ConfidenceStringArray,
-    devOps: ConfidenceStringArray,
-    tools: ConfidenceStringArray,
-    aiML: ConfidenceStringArray,
-    other: ConfidenceStringArray,
+    languages:      ConfidenceStringArray,
+    frontend:       ConfidenceStringArray,
+    backend:        ConfidenceStringArray,
+    databases:      ConfidenceStringArray,
+    aiLlm:          ConfidenceStringArray,
+    cloudDevOps:    ConfidenceStringArray,
+    developerTools: ConfidenceStringArray,
+    coreConcepts:   ConfidenceStringArray,
+    technologies:   ConfidenceStringArray, // fallback
   }).nullable().optional(),
 
   education: z.array(z.object({
@@ -66,23 +73,23 @@ export const resumeParserSchema = z.object({
 
   projects: z.array(z.object({
     title: ConfidenceString,
-    description: ConfidenceString,
     technologies: ConfidenceStringArray,
-    github: ConfidenceString,
-    liveDemo: ConfidenceString,
-    achievements: ConfidenceStringArray,
+    github: ConfidenceStringWithName,
+    liveDemo: ConfidenceStringWithName,
+    bullets: ConfidenceStringArray,
   }).nullable()).nullable().optional(),
 
   certifications: z.array(z.object({
     name: ConfidenceString,
     issuer: ConfidenceString,
     date: ConfidenceString,
-    url: ConfidenceString,
+    url: ConfidenceStringWithName,
   }).nullable()).nullable().optional(),
 
   achievements: z.array(z.object({
     title: ConfidenceString,
     description: ConfidenceString,
+    url: ConfidenceStringWithName,
   }).nullable()).nullable().optional(),
 
   leadership: z.array(z.object({

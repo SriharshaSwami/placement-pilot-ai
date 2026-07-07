@@ -1,6 +1,10 @@
 import puppeteer from 'puppeteer';
 import ResumeRenderer from './ResumeRenderer.interface.js';
 
+// A4 at 96 DPI: 210mm × 297mm
+const A4_WIDTH_PX  = 794;   // 210mm @ 96dpi
+const A4_HEIGHT_PX = 1123;  // 297mm @ 96dpi
+
 export class PuppeteerRenderer extends ResumeRenderer {
   async renderPdf(url, jsonPayload, templateId = 'classic') {
     let browser;
@@ -10,6 +14,10 @@ export class PuppeteerRenderer extends ResumeRenderer {
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
       const page = await browser.newPage();
+
+      // Match the exact pixel dimensions the preview uses so there is
+      // zero layout reflow between preview and PDF export.
+      await page.setViewport({ width: A4_WIDTH_PX, height: A4_HEIGHT_PX, deviceScaleFactor: 1 });
       
       // Navigate to the shell route
       await page.goto(url, { waitUntil: 'networkidle0' });
@@ -28,19 +36,28 @@ export class PuppeteerRenderer extends ResumeRenderer {
                 resolve();
               }
             }, 50);
+
+            // Safety timeout after 5s
+            setTimeout(() => { clearInterval(checkReady); resolve(); }, 5000);
           } else {
             resolve();
           }
         });
       }, { json: jsonPayload, templateId });
 
-      // Give a tiny buffer for styles to settle and fonts to load
-      await new Promise(r => setTimeout(r, 500));
+      // Buffer for fonts/styles to fully settle
+      await new Promise(r => setTimeout(r, 800));
 
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        // Use explicit pixel dimensions — do NOT use format:'A4' together with
+        // preferCSSPageSize as they can conflict. We own the dimensions here.
+        width:  `${A4_WIDTH_PX}px`,
+        height: `${A4_HEIGHT_PX}px`,
         printBackground: true,
+        preferCSSPageSize: false,
         margin: { top: 0, bottom: 0, left: 0, right: 0 },
+        // Clamp to exactly one page — content is already constrained by the shell
+        pageRanges: '1',
       });
 
       return pdfBuffer;

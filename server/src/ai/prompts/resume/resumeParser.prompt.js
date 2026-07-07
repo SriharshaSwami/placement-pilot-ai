@@ -12,10 +12,18 @@ RULES:
 6. The JSON must contain the following top-level keys:
    - candidate (name, email, phone, linkedin, github, portfolio, location)
    - professionalSummary
-   - skills (languages, frameworks, libraries, databases, cloud, devOps, tools, aiML, other)
+   - skills.extracted: A flat array of ALL distinct technology/skill names found anywhere in the resume
+       (Skills section, Projects, Experience, everywhere). Extract verbatim — do NOT categorize, do NOT group.
+       Include: programming languages, frameworks, libraries, databases, tools, cloud platforms, developer tools,
+       engineering concepts (DSA, OOP, System Design, OS, CN, RBAC, Authentication), protocols (REST, GraphQL, WebSockets), etc.
+       EXTRACTION RULES:
+       - Extract every meaningful technology or concept mentioned. Never omit skills to keep the list short.
+       - Do NOT include marketing phrases like 'AI-powered', 'scalable', 'real-time' as skills.
+       - If a skill appears in multiple sections, include it only once.
+       - Include DSA, OOP, DBMS, Operating Systems, Computer Networks, Authentication, RBAC — these are valid CS concepts.
    - education (institution, degree, specialization, startDate, endDate, cgpa, percentage, location)
    - experience (company, role, employmentType, startDate, endDate, duration, location, responsibilities (array), technologies (array))
-   - projects (title, description, technologies, github, liveDemo, achievements)
+   - projects (title, technologies, github, liveDemo, bullets)
    - certifications (name, issuer, date, url)
    - achievements (title, description)
    - leadership (role, organization, description)

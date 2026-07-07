@@ -84,7 +84,7 @@ export const generatePdf = asyncHandler(async (req, res) => {
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${resume.title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf"`);
-  res.send(pdfBuffer);
+  res.send(Buffer.from(pdfBuffer));
 });
 
 export const updateTemplate = asyncHandler(async (req, res) => {
@@ -124,4 +124,27 @@ export const updateResumeData = asyncHandler(async (req, res) => {
 
   const updatedResume = await resumesService.updateResumeData(req.user._id, req.params.id, structuredData);
   res.status(200).json(successResponse(updatedResume, 'Resume data updated successfully'));
+});
+
+export const compressResume = asyncHandler(async (req, res) => {
+  const { structuredData } = req.body;
+  if (!structuredData) {
+    throw new CustomError('Structured data is required for compression', 400, 'BAD_REQUEST');
+  }
+
+  const geminiAdapter = (await import('../ai/adapters/gemini.adapter.js')).default;
+  const { buildCompressPrompt } = await import('../ai/prompts/resume/compress.prompt.js');
+  
+  const promptBuilder = buildCompressPrompt(structuredData);
+  const promptContent = promptBuilder.buildContent();
+  const systemInstruction = promptBuilder.getSystemInstruction();
+
+  const response = await geminiAdapter.generateStructuredJSON(
+    promptContent,
+    { type: 'object' }, // Let it return the same schema implicitly by telling it to match the original
+    systemInstruction
+  );
+
+  const compressedData = response.parsedJSON;
+  res.status(200).json(successResponse(compressedData, 'Resume compressed successfully'));
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { EditableNode } from '../../components/editor/EditableNode.jsx';
+import { Join } from '../../components/Layout/Conditional.jsx';
 
 export const Header = ({ data }) => {
   if (!data) return null;
@@ -27,14 +28,15 @@ export const Header = ({ data }) => {
         <EditableNode path="candidate.name" value={name?.value} placeholder="Full Name" tag="span" />
       </h1>
       
-      <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm text-slate-700">
-        {contactItems.map((item, index) => (
-          <React.Fragment key={index}>
-            <EditableNode path={item.path} value={item.value} tag="span" />
-            {index < contactItems.length - 1 && <span className="text-slate-400">•</span>}
-          </React.Fragment>
-        ))}
-      </div>
+      <Join 
+        separator={<span className="text-slate-400">•</span>}
+        items={contactItems.map(item => ({
+          value: item.value,
+          element: <EditableNode path={item.path} value={item.value} tag="span" />
+        }))}
+        className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm text-slate-700"
+        container="div"
+      />
     </div>
   );
 };

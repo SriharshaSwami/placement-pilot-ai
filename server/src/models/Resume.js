@@ -110,21 +110,21 @@ const resumeSchema = new mongoose.Schema(
         }],
         projects: [{
           title: { value: String, confidence: Number },
-          description: { value: String, confidence: Number },
           technologies: [{ value: String, confidence: Number }],
-          github: { value: String, confidence: Number },
-          liveDemo: { value: String, confidence: Number },
-          achievements: [{ value: String, confidence: Number }]
+          github: { value: String, name: { value: String, confidence: Number }, confidence: Number },
+          liveDemo: { value: String, name: { value: String, confidence: Number }, confidence: Number },
+          bullets: [{ value: String, confidence: Number }]
         }],
         certifications: [{
           name: { value: String, confidence: Number },
           issuer: { value: String, confidence: Number },
           date: { value: String, confidence: Number },
-          url: { value: String, confidence: Number }
+          url: { value: String, name: { value: String, confidence: Number }, confidence: Number }
         }],
         achievements: [{
           title: { value: String, confidence: Number },
-          description: { value: String, confidence: Number }
+          description: { value: String, confidence: Number },
+          url: { value: String, name: { value: String, confidence: Number }, confidence: Number }
         }],
         leadership: [{
           role: { value: String, confidence: Number },
@@ -215,6 +215,47 @@ const resumeSchema = new mongoose.Schema(
 resumeSchema.index({ userId: 1 });
 resumeSchema.index({ userId: 1, isPrimary: 1 });
 resumeSchema.index({ userId: 1, deletedAt: 1 });
+
+// Backward compatibility migration for Project Descriptions and Achievements
+const migrateProjectDescriptions = (doc) => {
+  if (!doc || !doc.parsedData?.structuredData?.projects) return;
+  
+  // We use strict: false in schema, or since it's a subdocument it might be available in _doc
+  doc.parsedData.structuredData.projects.forEach(proj => {
+    const projDoc = proj._doc || proj;
+    
+    // Initialize bullets if they don't exist
+    if (!projDoc.bullets) {
+      projDoc.bullets = [];
+    }
+
+    // Migrate achievements to bullets
+    if (projDoc.achievements && projDoc.achievements.length > 0 && projDoc.bullets.length === 0) {
+      projDoc.bullets = [...projDoc.achievements];
+    }
+    
+    // Migrate description to bullets
+    if (projDoc.description?.value && projDoc.bullets.length === 0) {
+      projDoc.bullets = [{
+        value: projDoc.description.value,
+        confidence: projDoc.description.confidence || 1
+      }];
+    }
+
+    // Clean up legacy fields
+    projDoc.achievements = undefined;
+    projDoc.description = undefined;
+  });
+};
+
+resumeSchema.post(['find', 'findOne', 'findOneAndUpdate'], function(docs) {
+  if (!docs) return;
+  if (Array.isArray(docs)) {
+    docs.forEach(migrateProjectDescriptions);
+  } else {
+    migrateProjectDescriptions(docs);
+  }
+});
 
 const Resume = mongoose.model('Resume', resumeSchema);
 export default Resume;

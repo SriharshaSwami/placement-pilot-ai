@@ -2,6 +2,7 @@ import CustomError from '../errors/CustomError.js';
 import resumeRepository from '../repositories/resume.repository.js';
 import { uploadFile, deleteFile } from '../integrations/cloudinary/uploadService.js';
 import resumeParserService from './parser/resumeParser.service.js';
+import ResumeDeletionService from './ResumeDeletionService.js';
 
 const MAX_RESUMES = 10;
 
@@ -94,26 +95,7 @@ class ResumesService {
   }
 
   async deleteResume(userId, resumeId) {
-    let resume;
-    try {
-      resume = await this.getResume(userId, resumeId);
-    } catch (error) {
-      if (error.statusCode === 404) {
-        return { message: 'Resume already deleted' };
-      }
-      throw error;
-    }
-    
-    // Delete the physical file from Cloudinary and local storage
-    if (resume.cloudinaryPublicId) {
-      try {
-        await deleteFile(resume.cloudinaryPublicId);
-      } catch (error) {
-        console.error(`Failed to delete Cloudinary asset ${resume.cloudinaryPublicId}:`, error);
-      }
-    }
-    
-    return resumeRepository.softDelete(resume._id);
+    return ResumeDeletionService.deleteCompleteResumeCascade(userId, resumeId);
   }
 
   async saveManualEdits(userId, resumeId, updatedStructuredData) {

@@ -14,14 +14,15 @@ export const EditableNode = ({
   const elementRef = useRef(null);
   
   const isActive = activePath === path;
+  const safeValue = (value === null || value === undefined || value === 'null' || value === 'undefined') ? '' : value;
 
   // We only update the DOM if we are NOT currently editing it, 
   // to prevent cursor jumping while typing.
   useEffect(() => {
     if (elementRef.current && elementRef.current !== document.activeElement) {
-      elementRef.current.innerText = value || '';
+      elementRef.current.innerText = safeValue;
     }
-  }, [value]);
+  }, [safeValue]);
 
   // Scroll into view if this node becomes active (e.g. from AI Suggestion click or Editor click)
   useEffect(() => {
@@ -36,7 +37,7 @@ export const EditableNode = ({
 
   const handleBlur = (e) => {
     const newValue = e.target.innerText.trim();
-    if (newValue !== value) {
+    if (newValue !== safeValue) {
       updateData(path, newValue);
     }
   };
@@ -61,7 +62,7 @@ export const EditableNode = ({
       style={style}
       className={`
         outline-none transition-colors duration-150 relative
-        ${(!value && isActive) ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:opacity-50' : ''}
+        ${(!safeValue && isActive) ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:opacity-50' : ''}
         print:border-none print:hover:border-none print:bg-transparent print:hover:bg-transparent print:empty:before:content-none
         hover:bg-primary-50 hover:ring-2 hover:ring-primary-200 hover:ring-inset dark:hover:bg-primary-900/30 dark:hover:ring-primary-800
         focus:bg-white focus:ring-2 focus:ring-primary-500 focus:ring-inset dark:focus:bg-slate-900 dark:focus:ring-primary-600

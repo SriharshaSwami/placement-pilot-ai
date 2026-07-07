@@ -14,8 +14,8 @@ export const ModernTemplate = ({ data }) => {
   if (!data) return null;
 
   return (
-    <div className="bg-white w-full max-w-[850px] shadow-lg print:shadow-none print:max-w-none mx-auto text-slate-800 font-sans border-t-8 border-primary-600" style={{ minHeight: '1100px' }}>
-      <div className="p-10 space-y-6">
+    <div className="bg-white w-full max-w-[850px] shadow-lg print:shadow-none print:max-w-none mx-auto text-slate-800 font-sans border-t-8 border-primary-600 min-h-[1100px] print:min-h-0">
+      <div className="p-10 print:px-10 print:py-0 space-y-6">
         <Header data={data.candidate} />
         
         {data.professionalSummary?.value && (

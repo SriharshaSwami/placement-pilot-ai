@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, Loader2, Save, Undo2, Redo2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, Save, Undo2, Redo2, AlertCircle, PanelLeftClose, PanelLeftOpen, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { getResume, patchResumeData } from '@/services/resume.service.js';
 import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
 import { ErrorState } from '@/components/feedback/ErrorState.jsx';
-import { ResumeTemplateEngine } from '../components/ResumeTemplateEngine.jsx';
+import { ResumeLayoutEngine } from '../components/ResumeLayoutEngine.jsx';
 import { ResumeEditor } from '../components/editor/ResumeEditor.jsx';
 import { useHistoryState } from '@/hooks/useHistoryState.js';
 import { EditorProvider } from '../contexts/EditorContext.jsx';
@@ -18,6 +18,54 @@ const ResumePreview = () => {
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [activeSidebarTab, setActiveSidebarTab] = useState('editor');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const templateRef = useRef(null);
+  const previewContainerRef = useRef(null);
+  const [exceedsOnePage, setExceedsOnePage] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  
+  const [zoom, setZoom] = useState(1);
+  const [isAutoFit, setIsAutoFit] = useState(true);
+
+  useEffect(() => {
+    if (!isAutoFit || !previewContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        // A4 width ~794px, height ~1123px (subtract 64px for padding)
+        const scaleX = (width - 64) / 794;
+        const scaleY = (height - 64) / 1123;
+        // Fit within container, max 1.5x zoom
+        const fitScale = Math.min(scaleX, scaleY, 1.5);
+        setZoom(fitScale > 0.1 ? fitScale : 0.1);
+      }
+    });
+    observer.observe(previewContainerRef.current);
+    return () => observer.disconnect();
+  }, [isAutoFit, activeSidebarTab]);
+
+  // Handle pinch-to-zoom on trackpads
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e) => {
+      // ctrlKey is true for pinch-to-zoom gestures on trackpads
+      if (e.ctrlKey) {
+        e.preventDefault();
+        setIsAutoFit(false);
+        setZoom(z => {
+          // Adjust sensitivity
+          const newZoom = z - (e.deltaY * 0.01);
+          // Clamp between 20% and 250%
+          return Math.min(Math.max(0.2, newZoom), 2.5);
+        });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['resume', id],
@@ -43,6 +91,8 @@ const ResumePreview = () => {
     }
   }, [initialStructuredData, overwrite]);
 
+  // ResizeObserver logic has been moved to ResumeLayoutEngine
+
   const hasUnsavedChanges =
     initialStructuredData &&
     editableData &&
@@ -65,17 +115,30 @@ const ResumePreview = () => {
   };
 
   const generateFilename = (format) => {
-    const candidateName =
-      editableData?.candidate?.name?.value?.replace(/\s+/g, '_') || 'Candidate';
-    let roleStr = '';
-    let companyStr = '';
-    if (editableData?.experience?.length > 0) {
-      const latestExp = editableData.experience[0];
-      if (latestExp.role?.value) roleStr = `_${latestExp.role.value.replace(/\s+/g, '_')}`;
-      if (latestExp.company?.value) companyStr = `_${latestExp.company.value.replace(/\s+/g, '_')}`;
+    const sanitize = (str) =>
+      (str || '').replace(/[^a-zA-Z0-9 \-_]/g, '').trim().replace(/\s+/g, '_');
+
+    // Prefer the candidate's actual name from parsed data
+    const candidateName = sanitize(
+      editableData?.candidate?.name?.value || resume?.title || 'Resume'
+    );
+
+    // Build a context tag from the resume title
+    // e.g. "Tailored for Google" -> "_Tailored_Google"
+    // e.g. resume title "SDE Intern" (different from candidate name) -> "_SDE_Intern"
+    let context = '';
+    const title = resume?.title || '';
+    const tailoredMatch = title.match(/Tailored for (.+?)(?:\s*v\d+)?$/i);
+    if (tailoredMatch) {
+      context = `_Tailored_${sanitize(tailoredMatch[1])}`;
+    } else if (title && sanitize(title) !== candidateName) {
+      context = `_${sanitize(title)}`;
     }
-    const dateStr = new Date().toISOString().split('T')[0];
-    return `${candidateName}${roleStr}${companyStr}_${dateStr}.${format}`;
+
+    // Append today's date for uniqueness: e.g. 2025-07-08
+    const today = new Date().toISOString().slice(0, 10);
+
+    return `${candidateName}_Resume${context}_${today}.${format}`;
   };
 
   const validateATS = (resumeData) => {
@@ -129,20 +192,30 @@ const ResumePreview = () => {
     setEditableData(newData);
   };
 
+  const handleOptimizeFit = async () => {
+    // This feature is being phased out in favor of manual editing for 100% exact WYSIWYG
+    toast.error('Auto-optimization is deprecated. Please manually trim your content to fit one page.');
+  };
+
   const handleDownload = async (format = 'pdf') => {
     if (hasUnsavedChanges) {
       toast.error('Please save your changes before downloading.');
       return;
     }
     if (editableData) validateATS(editableData);
+
     if (isDownloading) return;
     setIsDownloading(true);
     const toastId = toast.loading(`Generating ${format.toUpperCase()}...`);
     try {
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/resumes/${id}/${format}`,
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        { credentials: 'include' }
       );
+      if (response.status === 401) {
+        window.dispatchEvent(new Event('unauthorized'));
+        throw new Error('Session expired. Please log in again.');
+      }
       if (!response.ok) {
         const errData = await response.json().catch(() => null);
         throw new Error(errData?.message || `Failed to generate ${format.toUpperCase()}`);
@@ -195,6 +268,16 @@ const ResumePreview = () => {
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
+            
+            {/* Sidebar Toggle Button (Desktop only) */}
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="hidden lg:flex p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
+              title={isSidebarOpen ? "Close Editor Sidebar" : "Open Editor Sidebar"}
+            >
+              {isSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+            </button>
+
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-semibold text-slate-900 dark:text-white truncate max-w-[200px] md:max-w-md">
@@ -209,6 +292,21 @@ const ResumePreview = () => {
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">Live Editing Mode</p>
             </div>
+            
+            {/* One-Page Fit Indicator & Actions */}
+            <div className="ml-4 flex items-center gap-2">
+              <div className={`px-3 py-1 text-xs font-medium rounded-full border flex items-center gap-1.5 transition-colors ${
+                exceedsOnePage 
+                  ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-400' 
+                  : 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800/50 dark:text-emerald-400'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${exceedsOnePage ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                {exceedsOnePage ? 'Overflows 1 Page' : '1-Page Fit'}
+              </div>
+              
+              {/* Removed Optimize Fit button since auto-compression is deprecated */}
+            </div>
+
           </div>
 
           {/* Right: undo/redo + save + export */}
@@ -243,11 +341,11 @@ const ResumePreview = () => {
 
             <button
               onClick={() => handleDownload('pdf')}
-              disabled={isDownloading || hasUnsavedChanges}
+              disabled={isDownloading || isCompressing || hasUnsavedChanges}
               className="inline-flex items-center gap-2 px-3 md:px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title={hasUnsavedChanges ? 'Save changes before downloading' : 'Download PDF'}
             >
-              {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {isDownloading || isCompressing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               <span className="hidden sm:inline">Export PDF</span>
             </button>
           </div>
@@ -276,7 +374,11 @@ const ResumePreview = () => {
           </div>
 
           {/* Left: Resume Editor panel */}
-          <div className={`w-full lg:w-[480px] xl:w-[500px] flex-none bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-col print:hidden shadow-lg z-10 relative pt-12 lg:pt-0 ${activeSidebarTab === 'editor' ? 'flex' : 'hidden lg:flex'}`}>
+          <div className={`w-full lg:w-[480px] xl:w-[500px] flex-none bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-col print:hidden shadow-lg z-10 relative pt-12 lg:pt-0 ${
+            activeSidebarTab === 'editor' 
+              ? (isSidebarOpen ? 'flex' : 'flex lg:hidden') 
+              : (isSidebarOpen ? 'hidden lg:flex' : 'hidden')
+          }`}>
             <div className="flex items-center justify-between p-4 pb-0 border-b border-slate-200 dark:border-slate-700">
               <h2 className="font-semibold text-slate-800 dark:text-white pb-3">Resume Editor</h2>
               <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 rounded-lg p-1 mb-2">
@@ -296,9 +398,54 @@ const ResumePreview = () => {
           </div>
 
           {/* Right: Live Preview pane */}
-          <div className={`flex-1 overflow-y-auto print:overflow-visible bg-slate-100 dark:bg-slate-900 p-8 pt-20 lg:pt-8 print:p-0 flex justify-center custom-scrollbar ${activeSidebarTab === 'preview' ? 'block' : 'hidden lg:block'}`}>
-            <div className="transition-all duration-300 origin-top">
-              <ResumeTemplateEngine structuredData={editableData} templateId="classic" />
+          <div 
+            ref={previewContainerRef}
+            className={`flex-1 overflow-auto print:overflow-visible bg-slate-100 dark:bg-slate-900 custom-scrollbar relative ${activeSidebarTab === 'preview' ? 'block' : 'hidden lg:block'}`}
+          >
+            {/* Zoom Controls */}
+            <div className="fixed bottom-6 right-6 flex items-center gap-1 bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700 rounded-full p-1 z-30 print:hidden">
+              <button onClick={() => { setIsAutoFit(false); setZoom(z => Math.max(0.3, z - 0.1)) }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300 transition-colors" title="Zoom Out">
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="px-2 text-xs font-medium text-slate-700 dark:text-slate-200 min-w-[4ch] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button onClick={() => { setIsAutoFit(false); setZoom(z => Math.min(2, z + 0.1)) }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-300 transition-colors" title="Zoom In">
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+              <button onClick={() => setIsAutoFit(true)} className={`p-2 rounded-full transition-colors ${isAutoFit ? 'bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'}`} title="Fit to Screen">
+                <Maximize className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Perfect Centering Wrapper */}
+            <div className="min-h-full min-w-max flex flex-col print:block">
+              {/* Top Spacer */}
+              <div className="flex-1 min-h-8 shrink-0 print:hidden"></div>
+              
+              <div className="px-8 flex justify-center print:px-0">
+                {/* Scaled Wrapper */}
+                <div 
+                  style={{ width: 794 * zoom, height: 1123 * zoom }} 
+                  className="transition-all duration-200 ease-out shrink-0 print:!w-auto print:!height-auto"
+                >
+                  <div 
+                    ref={templateRef} 
+                    style={{ transform: `scale(${zoom})`, width: 794, height: 1123 }}
+                    className="origin-top-left print:!transform-none"
+                  >
+                    <ResumeLayoutEngine 
+                      structuredData={editableData} 
+                      templateId="classic" 
+                      onOverflowChange={setExceedsOnePage}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Bottom Spacer */}
+              <div className="flex-1 min-h-8 shrink-0 print:hidden"></div>
             </div>
           </div>
 

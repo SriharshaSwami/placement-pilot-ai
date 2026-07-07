@@ -32,12 +32,10 @@ export const ClassicTemplate = ({ data }) => {
 
   return (
     <div
-      className="bg-white print:shadow-none mx-auto"
+      className="bg-white print:shadow-none mx-auto px-[15mm] py-[12mm] print:py-0"
       style={{
         width: '210mm',
-        minHeight: '297mm',
         boxSizing: 'border-box',
-        padding: '12mm 15mm 12mm 15mm',
         fontFamily: '"Arial", "Helvetica", sans-serif',
         fontSize: '9pt',
         color: '#1e293b',

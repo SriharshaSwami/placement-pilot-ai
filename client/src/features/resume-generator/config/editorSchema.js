@@ -69,12 +69,13 @@ export const EDITOR_SCHEMA = [
     itemTitle: 'Project',
     fields: [
       { key: 'title', label: 'Project Title', type: 'text', col: true },
-      { key: 'github', label: 'GitHub URL', type: 'text', col: true },
-      { key: 'liveDemo', label: 'Live Demo URL', type: 'text', col: true },
-      { key: 'description', label: 'Description', type: 'multiline' },
-      { key: 'achievements', label: 'Achievements / Bullet Points', type: 'string-array' }
+      { key: 'github.name', label: 'Link 1 Name (e.g. GitHub)', type: 'text', col: true },
+      { key: 'github', label: 'Link 1 URL', type: 'text', col: true },
+      { key: 'liveDemo.name', label: 'Link 2 Name (e.g. Live Demo)', type: 'text', col: true },
+      { key: 'liveDemo', label: 'Link 2 URL', type: 'text', col: true },
+      { key: 'bullets', label: 'Bullets', type: 'string-array' }
     ],
-    defaultItem: { title: { value: '' }, github: { value: '' }, liveDemo: { value: '' }, description: { value: '' }, achievements: [] }
+    defaultItem: { title: { value: '' }, github: { value: '' }, liveDemo: { value: '' }, bullets: [] }
   },
   {
     key: 'skills',
@@ -90,6 +91,7 @@ export const EDITOR_SCHEMA = [
       { key: 'name', label: 'Name', type: 'text', col: true },
       { key: 'issuer', label: 'Issuer', type: 'text', col: true },
       { key: 'date', label: 'Date', type: 'text', col: true },
+      { key: 'url.name', label: 'Link Name (e.g. Credential)', type: 'text', col: true },
       { key: 'url', label: 'URL', type: 'text', col: true }
     ],
     defaultItem: { name: { value: '' }, issuer: { value: '' }, date: { value: '' }, url: { value: '' } }
@@ -101,6 +103,8 @@ export const EDITOR_SCHEMA = [
     itemTitle: 'Achievement',
     fields: [
       { key: 'title', label: 'Title', type: 'text', col: true },
+      { key: 'url.name', label: 'Link Name', type: 'text', col: true },
+      { key: 'url', label: 'URL', type: 'text', col: true },
       { key: 'description', label: 'Description', type: 'multiline' }
     ],
     defaultItem: { title: { value: '' }, description: { value: '' } }

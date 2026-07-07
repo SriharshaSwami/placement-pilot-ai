@@ -17,9 +17,12 @@ import memoryRoutes from './memory.routes.js';
 import agentRoutes from './agent.routes.js';
 import tailoringRoutes from './tailoring.routes.js';
 import searchRoutes from './search.routes.js';
+import adminRoutes from './admin.routes.js';
+
 const router = express.Router();
 
 router.use('/auth', authRoutes);
+router.use('/admin', adminRoutes);
 router.use('/sessions', sessionRoutes);
 router.use('/users', usersRoutes);
 router.use('/resumes', resumesRoutes);

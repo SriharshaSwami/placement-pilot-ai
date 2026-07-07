@@ -2,6 +2,7 @@ import CustomError from '../errors/CustomError.js';
 import jobRepository from '../repositories/job.repository.js';
 import resumeRepository from '../repositories/resume.repository.js';
 import jobParserService from './parser/jobParser.service.js';
+import JobDeletionService from './JobDeletionService.js';
 
 class JobsService {
   async createJob(userId, jobData) {
@@ -94,8 +95,7 @@ class JobsService {
   }
 
   async deleteJob(userId, jobId) {
-    await this.getJob(userId, jobId); // verifies existence and ownership
-    await jobRepository.deleteById(jobId);
+    return JobDeletionService.deleteCompleteJobCascade(userId, jobId);
   }
 
   async getRankedJobs(userId, resumeId) {

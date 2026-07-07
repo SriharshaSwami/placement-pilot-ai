@@ -38,29 +38,16 @@ export const Sidebar = () => {
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden"
+          className="absolute inset-0 z-40 bg-slate-900/80 backdrop-blur-sm lg:hidden"
           onClick={closeSidebar}
         />
       )}
 
       {/* Sidebar Component */}
       <div className={classNames(
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
-        'fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-surface-light dark:bg-surface-dark border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:static lg:translate-x-0'
+        isSidebarOpen ? 'translate-x-0 lg:ml-0' : '-translate-x-full lg:-ml-72',
+        'absolute inset-y-0 left-0 z-50 flex w-72 shrink-0 flex-col bg-surface-light dark:bg-surface-dark border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out lg:static'
       )}>
-        {/* Header */}
-        <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center">
-              <Bot className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-slate-900 dark:text-white">PlacementPilot</span>
-          </div>
-          <button onClick={closeSidebar} className="lg:hidden text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
         {/* Navigation Area */}
         <div className="flex flex-1 flex-col overflow-y-auto px-4 py-4">
           <nav className="flex-1 space-y-1">

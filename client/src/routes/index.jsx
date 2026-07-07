@@ -20,6 +20,7 @@ const ResumeAnalysisDashboard = React.lazy(() => import('../features/ai/pages/Re
 const ResumePreview = React.lazy(() => import('../features/resume-generator/pages/ResumePreview.jsx'));
 const ResumeRenderShell = React.lazy(() => import('../features/resume-generator/pages/ResumeRenderShell.jsx'));
 const JobBoard = React.lazy(() => import('../features/jobs/pages/JobBoard.jsx'));
+const JobDetails = React.lazy(() => import('../features/jobs/pages/JobDetails.jsx'));
 const TailoringDashboard = React.lazy(() => import('../features/tailoring/pages/TailoringDashboard.jsx'));
 const InterviewDashboard = React.lazy(() => import('../features/interview/pages/InterviewDashboard.jsx'));
 const InterviewSetup = React.lazy(() => import('../features/interview/pages/InterviewSetup.jsx'));
@@ -37,6 +38,7 @@ const KnowledgeBase = React.lazy(() => import('../features/knowledge/pages/Knowl
 const MemoryDashboard = React.lazy(() => import('../features/memory/pages/MemoryDashboard.jsx'));
 const AIWorkspace = React.lazy(() => import('../features/agents/pages/AIWorkspace.jsx'));
 const SemanticSearch = React.lazy(() => import('../features/search/pages/SemanticSearch.jsx'));
+const AiDashboard = React.lazy(() => import('../features/admin/pages/AiDashboard.jsx'));
 
 const SuspenseWrapper = ({ children }) => (
   <Suspense fallback={<LoadingSkeleton />}>
@@ -76,6 +78,7 @@ const router = createBrowserRouter([
           { path: '/resume/:id/analysis', element: <SuspenseWrapper><ResumeAnalysisDashboard /></SuspenseWrapper> },
           { path: '/resume/:id/preview', element: <SuspenseWrapper><ResumePreview /></SuspenseWrapper> },
           { path: '/jobs', element: <SuspenseWrapper><JobBoard /></SuspenseWrapper> },
+          { path: '/jobs/:id', element: <SuspenseWrapper><JobDetails /></SuspenseWrapper> },
           { path: '/tailoring/job/:jobId', element: <SuspenseWrapper><TailoringDashboard /></SuspenseWrapper> },
           { path: '/interview', element: <SuspenseWrapper><InterviewDashboard /></SuspenseWrapper> },
           { path: '/interview/setup', element: <SuspenseWrapper><InterviewSetup /></SuspenseWrapper> },
@@ -94,6 +97,7 @@ const router = createBrowserRouter([
           { path: '/workspace', element: <SuspenseWrapper><AIWorkspace /></SuspenseWrapper> },
           { path: '/ai', element: <SuspenseWrapper><AIWorkspace /></SuspenseWrapper> },
           { path: '/search', element: <SuspenseWrapper><SemanticSearch /></SuspenseWrapper> },      
+          { path: '/admin/ai-dashboard', element: <SuspenseWrapper><AiDashboard /></SuspenseWrapper> },      
         ],
       },
     ],

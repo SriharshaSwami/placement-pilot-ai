@@ -19,7 +19,7 @@ api.interceptors.response.use(
     // Handle global errors here
     if (status === 401) {
       window.dispatchEvent(new Event('unauthorized'));
-      if (!error.config?.url?.includes('/auth/me')) {
+      if (!error.config?.url?.includes('/auth/me') && !error.config?.url?.includes('/auth/login')) {
         toast.error('Session expired. Please log in again.');
       }
     } else if (status === 403) {

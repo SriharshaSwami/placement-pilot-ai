@@ -1,5 +1,6 @@
 import React from 'react';
 import { EditableNode } from '../../components/editor/EditableNode.jsx';
+import { Join } from '../../components/Layout/Conditional.jsx';
 
 export const Skills = ({ data }) => {
   if (!data || Object.keys(data).length === 0) return null;
@@ -32,14 +33,15 @@ export const Skills = ({ data }) => {
         {renderedCategories.map((cat, index) => (
           <div key={index} className="text-sm">
             <span className="font-bold text-slate-900 mr-2">{cat.label}:</span>
-            <span className="text-slate-800 leading-relaxed">
-              {data[cat.key].map((skill, idx) => (
-                <React.Fragment key={idx}>
-                  <EditableNode path={`skills.${cat.key}.${idx}`} value={skill.value} tag="span" />
-                  {idx < data[cat.key].length - 1 && ', '}
-                </React.Fragment>
-              ))}
-            </span>
+            <Join 
+              separator=", "
+              items={data[cat.key].map((skill, idx) => ({
+                value: skill.value,
+                element: <EditableNode path={`skills.${cat.key}.${idx}`} value={skill.value} tag="span" />
+              }))}
+              className="text-slate-800 leading-relaxed"
+              container="span"
+            />
           </div>
         ))}
       </div>

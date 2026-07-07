@@ -46,7 +46,7 @@ class GeminiClient {
       });
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new CustomError('Gemini API Timeout', 504, 'AI_TIMEOUT')), 30000)
+        setTimeout(() => reject(new CustomError('Gemini API Timeout', 504, 'AI_TIMEOUT')), 90000)
       );
 
       const response = await Promise.race([generatePromise, timeoutPromise]);
@@ -56,7 +56,11 @@ class GeminiClient {
       try {
         const cleanText = rawText.replace(/```(?:json)?\n?/g, '').replace(/```\n?/g, '').trim();
         const parsedJSON = JSON.parse(cleanText);
-        return { parsedJSON, rawText };
+        return { 
+          parsedJSON, 
+          rawText,
+          usageMetadata: response.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 }
+        };
       } catch (parseError) {
          console.error('[GeminiClient] JSON Parse Error. Raw Text was:\n', rawText);
          throw new CustomError('Failed to parse AI response into JSON', 500, 'AI_PARSE_ERROR');
@@ -77,7 +81,10 @@ class GeminiClient {
         contents: promptText,
         config: Object.keys(config).length > 0 ? config : undefined
       });
-      return response.text;
+      return {
+        text: response.text,
+        usageMetadata: response.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 }
+      };
     } catch (error) {
        throw new CustomError(`Gemini API Error: ${error.message}`, 502, 'AI_API_ERROR');
     }

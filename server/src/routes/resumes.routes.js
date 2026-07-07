@@ -14,6 +14,7 @@ import {
   updateTemplate,
   saveManualEdits,
   updateResumeData,
+  compressResume,
 } from '../controllers/resumes.controller.js';
 import { protect } from '../middleware/authMiddleware.js';
 import CustomError from '../errors/CustomError.js';
@@ -55,5 +56,6 @@ router.get('/:id/versions', getVersions);
 router.post('/:id/restore', restoreVersion);
 router.post('/:id/save-edits', saveManualEdits);
 router.patch('/:id/data', updateResumeData);
+router.post('/:id/compress', compressResume);
 
 export default router;

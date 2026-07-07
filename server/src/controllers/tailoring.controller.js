@@ -3,8 +3,8 @@ import { successResponse } from '../utils/responseFormatter.js';
 import tailoringService from '../services/tailoring.service.js';
 
 export const initiateTailoring = asyncHandler(async (req, res) => {
-  const { jobId, resumeId } = req.body;
-  const session = await tailoringService.generateTailoringSession(req.user._id, jobId, resumeId);
+  const { jobId, resumeId, forceRegenerate } = req.body;
+  const session = await tailoringService.generateTailoringSession(req.user._id, jobId, resumeId, forceRegenerate);
   res.status(201).json(successResponse(session, 'Tailoring session generated'));
 });
 

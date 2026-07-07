@@ -1,17 +1,32 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getJobs, createJob } from '@/services/job.service.js';
+import { getJobs, createJob, deleteJob } from '@/services/job.service.js';
 import { getResumes } from '@/services/resume.service.js';
 import { PageHeader } from '@/components/ui/PageHeader.jsx';
 import { EmptyState } from '@/components/feedback/EmptyState.jsx';
 import { LoadingSkeleton } from '@/components/feedback/LoadingSkeleton.jsx';
-import { Plus, Briefcase, Zap } from 'lucide-react';
+import { Plus, Briefcase, Zap, MoreVertical, Edit, Copy, Trash2, Eye } from 'lucide-react';
 import { classNames } from '@/utils/formatters.js';
+import { useModal } from '@/contexts/ModalContext.jsx';
+import toast from 'react-hot-toast';
+import { EditJobModal } from '../components/EditJobModal.jsx';
 
 export default function JobBoard() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { confirm } = useModal();
   const [isAdding, setIsAdding] = useState(false);
   const [newJob, setNewJob] = useState({ company: '', role: '', description: '' });
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [jobToEdit, setJobToEdit] = useState(null);
+  
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = () => setOpenMenuId(null);
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
 
   const { data: resumesResponse, isLoading: isLoadingResumes } = useQuery({
     queryKey: ['resumes'],
@@ -32,12 +47,52 @@ export default function JobBoard() {
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       setIsAdding(false);
       setNewJob({ company: '', role: '', description: '' });
+      toast.success('Job saved successfully.');
     },
+    onError: (err) => toast.error('Failed to save job: ' + (err.response?.data?.message || err.message))
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteJob,
+    onSuccess: (_, deletedId) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.removeQueries({ queryKey: ['job', deletedId] });
+      toast.success('Job deleted successfully.');
+    },
+    onError: (err) => toast.error('Failed to delete job: ' + (err.response?.data?.message || err.message))
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
     createMutation.mutate(newJob);
+  };
+
+  const handleDelete = async (e, job) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    const confirmed = await confirm({
+      title: 'Delete Job?',
+      description: `Are you sure you want to delete the job for "${job.role}" at ${job.company}? Only the Job and its related temporary tailoring artifacts will be removed. Your resumes will remain completely untouched.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      isDestructive: true,
+    });
+    if (confirmed) {
+      deleteMutation.mutate(job._id);
+    }
+  };
+
+  const handleDuplicate = (e, job) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    const duplicatedJob = {
+      company: job.company,
+      role: `${job.role} (Copy)`,
+      description: job.description,
+      location: job.location,
+      jobType: job.jobType
+    };
+    createMutation.mutate(duplicatedJob);
   };
 
   const jobs = jobsResponse?.data || [];
@@ -151,11 +206,51 @@ export default function JobBoard() {
           {jobs.map(job => (
             <div key={job._id} className="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
               <div className="flex justify-between items-start">
-                <div>
+                <div className="cursor-pointer flex-1" onClick={() => navigate(`/jobs/${job._id}`)}>
                   <h4 className="text-lg font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 transition-colors">{job.role}</h4>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{job.company}</p>
                 </div>
-                {renderMatchBadge(job.similarityScore)}
+                <div className="flex items-center gap-2">
+                  {renderMatchBadge(job.similarityScore)}
+                  
+                  {/* Overflow Menu */}
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === job._id ? null : job._id); }}
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <MoreVertical className="w-5 h-5" />
+                    </button>
+                    {openMenuId === job._id && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10 py-1 overflow-hidden">
+                        <button 
+                          onClick={() => navigate(`/jobs/${job._id}`)} 
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                        >
+                          <Eye className="w-4 h-4 text-slate-400" /> View Details
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setJobToEdit(job); setOpenMenuId(null); }}
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                        >
+                          <Edit className="w-4 h-4 text-slate-400" /> Edit Job
+                        </button>
+                        <button 
+                          onClick={(e) => handleDuplicate(e, job)}
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2"
+                        >
+                          <Copy className="w-4 h-4 text-slate-400" /> Duplicate Job
+                        </button>
+                        <button 
+                          onClick={(e) => handleDelete(e, job)}
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500/80" /> Delete Job
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {job.keywords?.slice(0, 5).map(kw => (
@@ -180,6 +275,12 @@ export default function JobBoard() {
           ))}
         </div>
       )}
+      
+      <EditJobModal 
+        isOpen={!!jobToEdit} 
+        onClose={() => setJobToEdit(null)} 
+        job={jobToEdit} 
+      />
     </div>
   );
 }

@@ -28,7 +28,12 @@ import {
   Undo,
   Save,
   CheckCheck,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  Calendar,
+  Upload,
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -36,26 +41,54 @@ export default function TailoringDashboard() {
   const { jobId } = useParams();
   const navigate = useNavigate();
   const { prompt } = useModal();
+  
+  const [selectedResumeId, setSelectedResumeId] = useState(null);
   const [activeTab, setActiveTab] = useState('suggestions'); // 'suggestions' | 'preview'
 
-  const { data: resumesResponse, isLoading: isLoadingResumes } = useQuery({ queryKey: ['resumes'], queryFn: getResumes });
-  const { data: jobResponse, isLoading: isLoadingJob } = useQuery({ queryKey: ['job', jobId], queryFn: () => getJob(jobId) });
+  const { data: resumesResponse, isLoading: isLoadingResumes } = useQuery({ 
+    queryKey: ['resumes'], 
+    queryFn: getResumes 
+  });
+  
+  const { data: jobResponse, isLoading: isLoadingJob } = useQuery({ 
+    queryKey: ['job', jobId], 
+    queryFn: () => getJob(jobId) 
+  });
 
   const resumes = resumesResponse?.data || [];
-  const primaryResume = resumes.find(r => r.isPrimary) || resumes[0];
+  const validResumes = resumes.filter(r => r.parsedData?.metadata?.parsingStatus === 'success');
   const job = jobResponse?.data;
+  const primaryResume = resumes.find(r => r.isPrimary);
+
+  // When a resume is selected, we look up or initiate the session
+  const selectedResume = resumes.find(r => r._id === selectedResumeId);
 
   // Attempt to lookup an existing session
   const { data: sessionResponse, isLoading: isLoadingLookup, refetch } = useQuery({
-    queryKey: ['tailoringSession', jobId, primaryResume?._id],
-    queryFn: () => lookupSession(jobId, primaryResume._id),
-    enabled: !!primaryResume && !!jobId,
+    queryKey: ['tailoringSession', jobId, selectedResumeId],
+    queryFn: () => lookupSession(jobId, selectedResumeId),
+    enabled: !!selectedResumeId && !!jobId,
     retry: false,
   });
 
   const generateMutation = useMutation({
-    mutationFn: () => initiateTailoring(jobId, primaryResume._id),
+    mutationFn: (forceRegenerate = false) => initiateTailoring(jobId, selectedResumeId, forceRegenerate),
     onSuccess: () => refetch(),
+    onError: (err) => {
+      const rawMsg = err.response?.data?.message || err.message || '';
+      // Surface clean, user-friendly messages for common AI backend errors
+      let userMsg;
+      if (rawMsg.includes('503') || rawMsg.toLowerCase().includes('unavailable') || rawMsg.toLowerCase().includes('high demand')) {
+        userMsg = 'The AI service is temporarily overloaded. Please wait a moment and try again.';
+      } else if (rawMsg.toLowerCase().includes('timeout')) {
+        userMsg = 'The AI request timed out. The resume may be too long — try again in a few seconds.';
+      } else if (rawMsg.toLowerCase().includes('not parsed') || rawMsg.toLowerCase().includes('empty')) {
+        userMsg = 'This resume has not been parsed yet. Please visit Resume Details and click Reparse first.';
+      } else {
+        userMsg = 'Failed to generate tailoring suggestions. Please try again.';
+      }
+      toast.error(userMsg, { duration: 6000 });
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -89,33 +122,189 @@ export default function TailoringDashboard() {
     }
   });
 
-  useEffect(() => {
-    if (primaryResume && job && !isLoadingLookup && sessionResponse && !sessionResponse.data && !generateMutation.isPending && !generateMutation.isError) {
-      generateMutation.mutate();
-    }
-  }, [primaryResume, job, isLoadingLookup, sessionResponse, generateMutation]);
+
 
   if (isLoadingResumes || isLoadingJob) {
     return <AnalysisSkeleton />;
   }
 
-  if (!primaryResume) {
-    return <ErrorState message="No resumes found. Please upload a resume first." />;
+  // Phase 1: Resume Selection
+  if (!selectedResumeId) {
+    return (
+      <div className="space-y-8 pb-12 max-w-5xl mx-auto">
+        <PageHeader 
+          title="Select a Resume" 
+          description={job ? `Choose a resume to optimize for ${job.role} at ${job.company}` : "Choose a resume to optimize"}
+          backTo="/jobs"
+        />
+
+        {validResumes.length === 0 ? (
+          <div className="bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-12 text-center">
+            <FileText className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">No parsed resumes found</h3>
+            <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+              You need a successfully parsed resume to use the tailoring features. Upload a new resume in the Resume Builder.
+            </p>
+            <button
+              onClick={() => navigate('/resume')}
+              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors"
+            >
+              <Upload className="w-5 h-5" />
+              Go to Resume Builder
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {validResumes.map(resume => (
+              <button
+                key={resume._id}
+                onClick={() => setSelectedResumeId(resume._id)}
+                className="text-left bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm hover:border-indigo-500 hover:shadow-md transition-all group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 relative"
+              >
+                {resume.isPrimary && (
+                  <span className="absolute top-4 right-4 text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                    Default
+                  </span>
+                )}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 dark:text-white line-clamp-1 pr-12">
+                      {resume.title}
+                    </h3>
+                    <p className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1 mt-0.5">
+                      <CheckCircle className="w-3 h-3" />
+                      Parsed Successfully
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {new Date(resume.createdAt).toLocaleDateString()}
+                  </span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    Select <ArrowLeft className="w-3 h-3 rotate-180" />
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
 
-  if (generateMutation.isPending || isLoadingLookup) {
-    return <AnalysisSkeleton />;
+  // Phase 2: Tailoring Analysis
+  if (generateMutation.isPending) {
+    return (
+      <div className="space-y-6">
+        <PageHeader 
+          title="Tailor Resume to Job" 
+          description={job ? `Optimizing ${selectedResume?.title} for ${job.role} at ${job.company}` : "Optimizing..."}
+          backTo="/jobs"
+        />
+        <div className="p-12 text-center bg-surface-light dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Analyzing Resume...</h3>
+          <p className="text-slate-500 dark:text-slate-400">Matching Skills... Comparing Job Requirements... Generating Suggestions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoadingLookup) {
+    return (
+      <div className="space-y-8 pb-12 max-w-5xl mx-auto">
+        <AnalysisSkeleton />
+      </div>
+    );
   }
 
   if (generateMutation.isError) {
-    return <ErrorState message="Failed to generate tailoring suggestions. Ensure resume is parsed." onRetry={() => generateMutation.mutate()} />;
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-sm mb-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-0.5">Selected Resume</p>
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                {selectedResume?.title}
+              </h3>
+            </div>
+          </div>
+          <button
+            onClick={() => setSelectedResumeId(null)}
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            Change Resume
+          </button>
+        </div>
+        <ErrorState 
+          message={generateMutation.error?.response?.data?.message || "Failed to generate tailoring suggestions."} 
+          onRetry={() => generateMutation.mutate()} 
+        />
+      </div>
+    );
   }
 
   const session = sessionResponse?.data;
-  if (!session) return <AnalysisSkeleton />;
+  
+  if (!session) {
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto">
+        <PageHeader 
+          title="Tailor Resume to Job" 
+          description={job ? `Optimizing ${selectedResume?.title} for ${job.role} at ${job.company}` : "Optimizing..."}
+          backTo="/jobs"
+        />
+        
+        <div className="flex items-center justify-between bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-sm mb-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-0.5">Selected Resume</p>
+              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                {selectedResume?.title}
+              </h3>
+            </div>
+          </div>
+          <button
+            onClick={() => setSelectedResumeId(null)}
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Change Resume
+          </button>
+        </div>
+
+        <div className="bg-surface-light dark:bg-surface-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-12 text-center">
+          <FileText className="h-12 w-12 text-indigo-400 mx-auto mb-4 opacity-50" />
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Ready to Analyze</h3>
+          <p className="text-slate-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+            Click the button below to let PlacementPilot AI analyze how well this resume matches the job description and generate tailored suggestions.
+          </p>
+          <button
+            onClick={() => generateMutation.mutate(false)}
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors shadow-sm"
+          >
+            <RefreshCw className="w-5 h-5" />
+            Generate Tailoring
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const { matchAnalysis, suggestions } = session;
-  const originalSections = primaryResume?.parsedData?.sections || {};
+  const originalSections = selectedResume?.parsedData?.sections || {};
 
   // Compute tailored sections based on accepted suggestions
   const getTailoredSections = () => {
@@ -148,7 +337,7 @@ export default function TailoringDashboard() {
   const acceptedCount = suggestions.filter(s => s.status === 'accepted').length;
 
   const handleSaveVersion = async () => {
-    const defaultTitle = `${primaryResume.title} (Tailored for ${job.company})`;
+    const defaultTitle = `${selectedResume.title} (Tailored for ${job.company})`;
     const titleInput = await prompt({
       title: 'Save Tailored Resume',
       description: 'Enter a name for the new resume version:',
@@ -229,7 +418,7 @@ export default function TailoringDashboard() {
         <div className="flex items-center space-x-4">
           <PageHeader 
             title="Tailor Resume to Job" 
-            description={`Optimizing resume for ${job.role} at ${job.company}`}
+            description={job ? `Optimizing for ${job.role} at ${job.company}` : "Optimizing..."}
             backTo="/jobs"
           />
         </div>
@@ -242,6 +431,39 @@ export default function TailoringDashboard() {
             Save as New Version ({acceptedCount})
           </button>
         )}
+      </div>
+
+      {/* Selected Resume Banner */}
+      <div className="flex items-center justify-between bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-sm mb-6">
+        <div className="flex items-center gap-4">
+          <div className="bg-indigo-50 dark:bg-indigo-900/30 p-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-0.5">Selected Resume</p>
+            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              {selectedResume?.title}
+              <span className="text-[10px] bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                Parsed
+              </span>
+            </h3>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => generateMutation.mutate(true)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Regenerate
+          </button>
+          <button
+            onClick={() => setSelectedResumeId(null)}
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Change Resume
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

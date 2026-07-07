@@ -14,8 +14,8 @@ export const MinimalTemplate = ({ data }) => {
   if (!data) return null;
 
   return (
-    <div className="bg-white w-full max-w-[850px] shadow-lg print:shadow-none print:max-w-none mx-auto text-slate-700 font-serif" style={{ minHeight: '1100px' }}>
-      <div className="p-12 space-y-8">
+    <div className="bg-white w-full max-w-[850px] shadow-lg print:shadow-none print:max-w-none mx-auto text-slate-700 font-serif min-h-[1100px] print:min-h-0">
+      <div className="p-12 print:px-12 print:py-0 space-y-8">
         <Header data={data.candidate} />
         
         {data.professionalSummary?.value && (

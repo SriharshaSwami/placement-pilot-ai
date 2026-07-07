@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ResumeTemplateEngine } from '../components/ResumeTemplateEngine.jsx';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ResumeLayoutEngine } from '../components/ResumeLayoutEngine.jsx';
 
 /**
  * ResumeRenderShell
@@ -13,17 +13,29 @@ const ResumeRenderShell = () => {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    // Ensure we render in Light mode for PDF Generation
+    document.documentElement.classList.remove('dark');
+    
     // Expose a global function for Puppeteer to call
-    window.renderResume = (json, selectedTemplate = 'classic') => {
+    window.renderResume = (json, selectedTemplate = 'classic', resumeTitle = 'Resume') => {
       setStructuredData(json);
       setTemplateId(selectedTemplate);
-      // Give React a tick to mount the DOM before marking ready
+      
+      // Inject metadata for the PDF
+      const candidateName = json?.candidate?.name?.value || 'Candidate';
+      document.title = `${candidateName} - ${resumeTitle}`;
+      
+      let metaAuthor = document.querySelector('meta[name="author"]');
+      if (!metaAuthor) {
+        metaAuthor = document.createElement('meta');
+        metaAuthor.name = 'author';
+        document.head.appendChild(metaAuthor);
+      }
+      metaAuthor.content = candidateName;
+
+      // Give React a tick to mount the DOM before triggering optimization
       setTimeout(() => {
         setIsReady(true);
-        // We can add a DOM element that Puppeteer waits for
-        const div = document.createElement('div');
-        div.id = 'render-complete';
-        document.body.appendChild(div);
       }, 100);
     };
 
@@ -32,19 +44,42 @@ const ResumeRenderShell = () => {
     };
   }, []);
 
+  const handleOptimizationComplete = useCallback((finalLevel) => {
+    // Puppeteer waits for this element
+    if (!document.getElementById('render-complete')) {
+      const div = document.createElement('div');
+      div.id = 'render-complete';
+      // finalLevel is always 0 now, as optimization is removed
+      div.setAttribute('data-fit-level', 0);
+      document.body.appendChild(div);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isReady) {
+      handleOptimizationComplete(0);
+    }
+  }, [isReady, handleOptimizationComplete]);
+
   if (!structuredData) {
     return <div id="waiting-for-data">Waiting for data injection...</div>;
   }
 
   return (
-    <div className="bg-white" style={{ width: '100%', height: '100%' }}>
-      {/* 
-        This div wraps the engine. 
-        It ensures there are no margins/padding that would mess up the A4 print.
-      */}
-      <div id="resume-canvas" className={isReady ? 'ready' : 'rendering'}>
-        <ResumeTemplateEngine structuredData={structuredData} templateId={templateId} />
-      </div>
+    // Hard-constrain to exactly one A4 page (794×1123px @ 96dpi).
+    // overflow:hidden ensures Puppeteer CANNOT paginate anything onto a second page.
+    <div
+      id="resume-canvas"
+      className={isReady ? 'ready' : 'rendering'}
+      style={{
+        width:  794,
+        height: 1123,
+        overflow: 'hidden',
+        background: '#fff',
+        position: 'relative',
+      }}
+    >
+      <ResumeLayoutEngine structuredData={structuredData} templateId={templateId} />
     </div>
   );
 };

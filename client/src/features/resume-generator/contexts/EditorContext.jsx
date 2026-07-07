@@ -12,7 +12,7 @@ export const EditorProvider = ({ children, onUpdateData }) => {
   };
 
   return (
-    <EditorContext.Provider value={{ activePath, setActivePath, updateData }}>
+    <EditorContext.Provider value={{ activePath, setActivePath, updateData, isEditMode: true }}>
       {children}
     </EditorContext.Provider>
   );
@@ -22,7 +22,7 @@ export const useEditorContext = () => {
   const context = useContext(EditorContext);
   if (!context) {
     // Return a dummy context so templates can render without a provider (e.g. for simple testing)
-    return { activePath: null, setActivePath: () => {}, updateData: () => {} };
+    return { activePath: null, setActivePath: () => {}, updateData: () => {}, isEditMode: false };
   }
   return context;
 };

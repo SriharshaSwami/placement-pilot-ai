@@ -50,8 +50,11 @@ const ResumeBuilder = () => {
 
   const deleteMutation = useMutation({
     mutationFn: deleteResume,
-    onSuccess: () => {
+    onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['resumes'] });
+      queryClient.removeQueries({ queryKey: ['resume', deletedId] });
+      queryClient.invalidateQueries({ queryKey: ['tailoringSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['resumeAnalysis'] });
       toast.success('Resume deleted successfully.');
     },
     onError: (err) => toast.error('Delete failed: ' + (err.response?.data?.message || err.message))

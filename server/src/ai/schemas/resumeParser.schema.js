@@ -32,60 +32,12 @@ export const resumeParserSchemaJSON = {
     },
     "skills": {
       "type": "object",
+      "description": "Skills extracted verbatim from the resume. Classification is done server-side. Never categorize here.",
       "properties": {
-        "languages": {
+        "extracted": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "frameworks": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "libraries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "databases": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "cloud": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "devOps": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "tools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "aiML": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "other": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "description": "All distinct technology/skill names found in the resume, exactly as written.",
+          "items": { "type": "string" }
         }
       }
     },
@@ -170,9 +122,6 @@ export const resumeParserSchemaJSON = {
           "title": {
             "type": "string"
           },
-          "description": {
-            "type": "string"
-          },
           "technologies": {
             "type": "array",
             "items": {
@@ -185,7 +134,7 @@ export const resumeParserSchemaJSON = {
           "liveDemo": {
             "type": "string"
           },
-          "achievements": {
+          "bullets": {
             "type": "array",
             "items": {
               "type": "string"

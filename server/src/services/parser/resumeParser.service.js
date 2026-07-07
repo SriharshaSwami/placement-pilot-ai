@@ -323,7 +323,8 @@ class ResumeParserService {
       const { parsedJSON } = await geminiAdapter.generateStructuredJSON(
         promptText,
         resumeParserSchemaJSON,
-        'You must respond ONLY with valid JSON matching the requested structure. Extract all relevant details strictly matching the schema.'
+        'You must respond ONLY with valid JSON matching the requested structure. Extract all relevant details strictly matching the schema.',
+        { useCache: false, feature: 'resume-parser' }
       );
 
       // Map simple JSON to { value, confidence } format expected by Zod
@@ -343,14 +344,17 @@ class ResumeParserService {
       
       mappedJSON.professionalSummary = mapToConfidence(parsedJSON.professionalSummary);
       
-      if (parsedJSON.skills) {
+      if (parsedJSON.skills?.extracted && Array.isArray(parsedJSON.skills.extracted)) {
+        // AI extracted a flat list of skills. We categorize them deterministically on the server.
+        const { skillClassifier } = await import('../../skills/SkillClassifier.js');
+        
+        // Ensure they are strings
+        const rawStrings = parsedJSON.skills.extracted.filter(s => typeof s === 'string');
+        const classified = skillClassifier.classify(rawStrings);
+        
+        mappedJSON.skills = classified; // The classifier already returns { value, confidence } objects!
+      } else {
         mappedJSON.skills = {};
-        for (const key of Object.keys(parsedJSON.skills)) {
-          const arr = parsedJSON.skills[key];
-          if (Array.isArray(arr)) {
-            mappedJSON.skills[key] = arr.map(mapToConfidence).filter(Boolean);
-          }
-        }
       }
       
       const arraySections = [

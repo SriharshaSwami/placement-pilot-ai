@@ -191,23 +191,77 @@ export const ResumeEditor = React.memo(({ data, onChange }) => {
   };
 
   // --- Skills Specific ---
+  const SKILL_CATEGORIES = [
+    { key: 'languages',      label: 'Languages'       },
+    { key: 'frontend',       label: 'Frontend'         },
+    { key: 'backend',        label: 'Backend'          },
+    { key: 'databases',      label: 'Databases'        },
+    { key: 'aiLlm',          label: 'AI & LLM'         },
+    { key: 'cloudDevOps',    label: 'Cloud & DevOps'   },
+    { key: 'developerTools', label: 'Developer Tools'  },
+    { key: 'coreConcepts',   label: 'Core Concepts'    },
+    { key: 'technologies',   label: 'Other Technologies'},
+  ];
+
+  // Polyfill: merge ALL legacy taxonomy versions into the canonical 8-bucket scheme
+  const normalizeSkillsForEditor = (rawSkills) => {
+    if (!rawSkills) return {};
+    const merged = Object.fromEntries(SKILL_CATEGORIES.map(c => [c.key, []]));
+
+    // Populate canonical keys directly
+    for (const cat of SKILL_CATEGORIES) {
+      if (rawSkills[cat.key]?.length) merged[cat.key] = [...rawSkills[cat.key]];
+    }
+
+    // Map every legacy key to the right canonical bucket
+    const legacyMap = {
+      // v1 (9-bucket)
+      frameworks: 'frontend',   libraries: 'frontend',
+      cloud: 'cloudDevOps',     devOps: 'cloudDevOps',
+      aiML: 'aiLlm',            other: 'coreConcepts',
+      // v2 (6-bucket)
+      tools: 'developerTools',  concepts: 'coreConcepts',
+    };
+    for (const [old, target] of Object.entries(legacyMap)) {
+      if (rawSkills[old]?.length) merged[target] = [...merged[target], ...rawSkills[old]];
+    }
+
+    // Deduplicate within each bucket
+    for (const key of Object.keys(merged)) {
+      const seen = new Set();
+      merged[key] = merged[key].filter(item => {
+        if (!item?.value || seen.has(item.value)) return false;
+        seen.add(item.value); return true;
+      });
+    }
+    return merged;
+  };
+
   const updateSkillCategory = (category, commaStr) => {
     const arr = commaStr.split(',').map(s => ({ value: s.trim(), confidence: 100 })).filter(s => s.value);
-    onChange({
-      ...data,
-      skills: { ...data.skills, [category]: arr }
-    });
+    // Always write back with canonical 8 keys — drops all legacy keys permanently
+    const currentNormalized = normalizeSkillsForEditor(data.skills);
+    onChange({ ...data, skills: { ...currentNormalized, [category]: arr } });
   };
 
   const getSkillCategoryString = (category) => {
-    return (data.skills?.[category] || []).map(s => s.value).join(', ');
+    const normalized = normalizeSkillsForEditor(data.skills);
+    return (normalized[category] || []).map(s => s.value).join(', ');
   };
 
   // --- Recursive Renderers ---
 
   const renderField = (field, basePath, itemData, isSimple = false) => {
     const valuePath = basePath ? `${basePath}.${field.key}` : field.key;
-    const val = isSimple ? itemData?.[field.key] : itemData?.[field.key]?.value;
+    
+    let valData = itemData;
+    const keys = field.key.split('.');
+    for (const k of keys) {
+      if (!valData) break;
+      valData = valData[k];
+    }
+    
+    const val = isSimple ? valData : valData?.value;
     const isActive = activePath === valuePath;
     
     return (
@@ -298,13 +352,15 @@ export const ResumeEditor = React.memo(({ data, onChange }) => {
       return (
         <SectionAccordion key={section.key} title={section.title} isActive={isSectionActive}>
           <div className="space-y-4">
-            <p className="text-xs text-slate-500 mb-2">Enter skills separated by commas.</p>
-            {['languages', 'frameworks', 'libraries', 'databases', 'cloud', 'devOps', 'tools', 'other'].map(cat => (
-              <TextInput 
-                key={cat} 
-                label={cat.charAt(0).toUpperCase() + cat.slice(1)} 
-                value={getSkillCategoryString(cat)} 
-                onChange={(v) => updateSkillCategory(cat, v)} 
+            <p className="text-xs text-slate-500 mb-2">
+              Enter skills comma-separated. AI &amp; LLM only shows when you have real AI tech. Thin buckets auto-merge on re-parse.
+            </p>
+            {SKILL_CATEGORIES.map(cat => (
+              <TextInput
+                key={cat.key}
+                label={cat.label}
+                value={getSkillCategoryString(cat.key)}
+                onChange={(v) => updateSkillCategory(cat.key, v)}
               />
             ))}
           </div>
