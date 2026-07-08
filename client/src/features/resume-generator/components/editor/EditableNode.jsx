@@ -64,9 +64,9 @@ export const EditableNode = ({
         outline-none transition-colors duration-150 relative
         ${(!safeValue && isActive) ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 empty:before:opacity-50' : ''}
         print:border-none print:hover:border-none print:bg-transparent print:hover:bg-transparent print:empty:before:content-none
-        hover:bg-primary-50 hover:ring-2 hover:ring-primary-200 hover:ring-inset dark:hover:bg-primary-900/30 dark:hover:ring-primary-800
-        focus:bg-white focus:ring-2 focus:ring-primary-500 focus:ring-inset dark:focus:bg-slate-900 dark:focus:ring-primary-600
-        ${isActive ? 'ring-2 ring-primary-400 ring-inset bg-primary-50/50 dark:bg-primary-900/20 dark:ring-primary-700' : ''}
+        hover:bg-primary-50 hover:ring-2 hover:ring-primary-200 hover:ring-inset
+        focus:bg-white focus:ring-2 focus:ring-primary-500 focus:ring-inset
+        ${isActive ? 'ring-2 ring-primary-400 ring-inset bg-primary-50/50' : ''}
         ${className}
       `}
       data-placeholder={placeholder}

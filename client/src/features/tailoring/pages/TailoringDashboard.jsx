@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   initiateTailoring,
   lookupSession,
@@ -44,6 +44,7 @@ export default function TailoringDashboard() {
   
   const [selectedResumeId, setSelectedResumeId] = useState(null);
   const [activeTab, setActiveTab] = useState('suggestions'); // 'suggestions' | 'preview'
+  const queryClient = useQueryClient();
 
   const { data: resumesResponse, isLoading: isLoadingResumes } = useQuery({ 
     queryKey: ['resumes'], 
@@ -69,14 +70,29 @@ export default function TailoringDashboard() {
     queryFn: () => lookupSession(jobId, selectedResumeId),
     enabled: !!selectedResumeId && !!jobId,
     retry: false,
+    refetchInterval: 3000,
   });
+
+  const [persistedSession, setPersistedSession] = useState(null);
+
+  // Sync completed sessions to persisted state to avoid unmounting old data during regenerate
+  useEffect(() => {
+    if (sessionResponse?.data?.generationStatus === 'completed') {
+      setPersistedSession(sessionResponse.data);
+    }
+  }, [sessionResponse?.data]);
 
   const generateMutation = useMutation({
     mutationFn: (forceRegenerate = false) => initiateTailoring(jobId, selectedResumeId, forceRegenerate),
-    onSuccess: () => refetch(),
+    onMutate: () => {
+      setPersistedSession(null);
+    },
+    onSuccess: (response) => {
+      // Instantly update UI with the new session
+      queryClient.setQueryData(['tailoringSession', jobId, selectedResumeId], response);
+    },
     onError: (err) => {
       const rawMsg = err.response?.data?.message || err.message || '';
-      // Surface clean, user-friendly messages for common AI backend errors
       let userMsg;
       if (rawMsg.includes('503') || rawMsg.toLowerCase().includes('unavailable') || rawMsg.toLowerCase().includes('high demand')) {
         userMsg = 'The AI service is temporarily overloaded. Please wait a moment and try again.';
@@ -100,7 +116,7 @@ export default function TailoringDashboard() {
   });
 
   const batchStatusMutation = useMutation({
-    mutationFn: ({ status }) => batchUpdateSuggestions(session._id, status),
+    mutationFn: ({ status }) => batchUpdateSuggestions(persistedSession._id, status),
     onSuccess: (_, variables) => {
       refetch();
       if (variables.status === 'pending') {
@@ -112,7 +128,7 @@ export default function TailoringDashboard() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: ({ title }) => saveTailoredResume(session._id, title),
+    mutationFn: ({ title }) => saveTailoredResume(persistedSession._id, title),
     onSuccess: () => {
       toast.success('Tailored resume saved as new version.');
       navigate('/resumes');
@@ -158,7 +174,10 @@ export default function TailoringDashboard() {
             {validResumes.map(resume => (
               <button
                 key={resume._id}
-                onClick={() => setSelectedResumeId(resume._id)}
+                onClick={() => {
+                  setSelectedResumeId(resume._id);
+                  setPersistedSession(null);
+                }}
                 className="text-left bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm hover:border-indigo-500 hover:shadow-md transition-all group focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 relative"
               >
                 {resume.isPrimary && (
@@ -198,25 +217,7 @@ export default function TailoringDashboard() {
     );
   }
 
-  // Phase 2: Tailoring Analysis
-  if (generateMutation.isPending) {
-    return (
-      <div className="space-y-6">
-        <PageHeader 
-          title="Tailor Resume to Job" 
-          description={job ? `Optimizing ${selectedResume?.title} for ${job.role} at ${job.company}` : "Optimizing..."}
-          backTo="/jobs"
-        />
-        <div className="p-12 text-center bg-surface-light dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Analyzing Resume...</h3>
-          <p className="text-slate-500 dark:text-slate-400">Matching Skills... Comparing Job Requirements... Generating Suggestions...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoadingLookup) {
+  if (isLoadingLookup && !persistedSession) {
     return (
       <div className="space-y-8 pb-12 max-w-5xl mx-auto">
         <AnalysisSkeleton />
@@ -224,7 +225,48 @@ export default function TailoringDashboard() {
     );
   }
 
-  if (generateMutation.isError) {
+  const currentSession = sessionResponse?.data;
+  const isGenerating = generateMutation.isPending || (currentSession && currentSession.generationStatus !== 'completed' && currentSession.generationStatus !== 'failed');
+  
+  if (!persistedSession && isGenerating) {
+    return (
+      <div className="space-y-6">
+        <PageHeader 
+          title="Tailor Resume to Job" 
+          description={job ? `Optimizing ${selectedResume?.title} for ${job.role} at ${job.company}` : "Optimizing..."}
+          backTo="/jobs"
+        />
+        <div className="p-12 text-center bg-surface-light dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm max-w-2xl mx-auto">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-6"></div>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Tailoring Resume...</h3>
+          <div className="space-y-3 text-left max-w-md mx-auto">
+            {[
+              { id: 'analyzing_jd', label: 'Analyzing Job Description' },
+              { id: 'gap_analysis', label: 'Performing Gap Analysis' },
+              { id: 'generating_resume', label: 'Generating Tailored Resume' },
+              { id: 'comparing_diff', label: 'Comparing With Original Resume' }
+            ].map((stage, idx) => {
+              const stages = ['analyzing_jd', 'extracting_profile', 'gap_analysis', 'generating_resume', 'validating', 'comparing_diff', 'preparing_suggestions'];
+              const currentIndex = currentSession ? stages.indexOf(currentSession.generationStatus) : -1;
+              const stageIndex = stages.indexOf(stage.id);
+              
+              const isPast = currentIndex > stageIndex;
+              const isCurrent = currentIndex === stageIndex;
+              
+              return (
+                <div key={stage.id} className={`flex items-center space-x-3 text-sm font-medium ${isPast ? 'text-green-600 dark:text-green-400' : isCurrent ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-600'}`}>
+                  {isPast ? <CheckCircle className="w-5 h-5" /> : isCurrent ? <div className="w-5 h-5 rounded-full border-2 border-current border-t-transparent animate-spin" /> : <div className="w-5 h-5 rounded-full border-2 border-current opacity-50" />}
+                  <span>{stage.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if ((generateMutation.isError || currentSession?.generationStatus === 'failed') && !persistedSession) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 p-4 rounded-xl shadow-sm mb-6">
@@ -240,23 +282,21 @@ export default function TailoringDashboard() {
             </div>
           </div>
           <button
-            onClick={() => setSelectedResumeId(null)}
+            onClick={() => { setSelectedResumeId(null); setPersistedSession(null); }}
             className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             Change Resume
           </button>
         </div>
         <ErrorState 
-          message={generateMutation.error?.response?.data?.message || "Failed to generate tailoring suggestions."} 
-          onRetry={() => generateMutation.mutate()} 
+          message={generateMutation.error?.response?.data?.message || "The AI processing failed or timed out. Please try again."} 
+          onRetry={() => generateMutation.mutate(true)} 
         />
       </div>
     );
   }
-
-  const session = sessionResponse?.data;
   
-  if (!session) {
+  if (!persistedSession && !isGenerating) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
         <PageHeader 
@@ -278,7 +318,7 @@ export default function TailoringDashboard() {
             </div>
           </div>
           <button
-            onClick={() => setSelectedResumeId(null)}
+            onClick={() => { setSelectedResumeId(null); setPersistedSession(null); }}
             className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 px-3 py-1.5 rounded-lg transition-colors"
           >
             Change Resume
@@ -303,7 +343,8 @@ export default function TailoringDashboard() {
     );
   }
 
-  const { matchAnalysis, suggestions } = session;
+  // Use the persisted session to render the UI safely
+  const { matchAnalysis, suggestions } = persistedSession;
   const originalSections = selectedResume?.parsedData?.sections || {};
 
   // Compute tailored sections based on accepted suggestions
@@ -425,10 +466,19 @@ export default function TailoringDashboard() {
         {acceptedCount > 0 && (
           <button
             onClick={handleSaveVersion}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm"
+            disabled={saveMutation.isLoading || saveMutation.isPending}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm ${
+              saveMutation.isLoading || saveMutation.isPending
+                ? 'bg-indigo-400 cursor-not-allowed text-white'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+            }`}
           >
-            <Save className="w-4 h-4" />
-            Save as New Version ({acceptedCount})
+            {(saveMutation.isLoading || saveMutation.isPending) ? (
+              <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saveMutation.isLoading || saveMutation.isPending ? 'Saving...' : `Save as New Version (${acceptedCount})`}
           </button>
         )}
       </div>
@@ -450,12 +500,23 @@ export default function TailoringDashboard() {
           </div>
         </div>
         <div className="flex gap-2">
+          {import.meta.env.DEV && currentSession?.aiCallCount !== undefined && (
+            <div className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-3 py-1.5 rounded-xl text-xs font-bold font-mono border border-purple-200 dark:border-purple-800 shadow-sm flex items-center gap-2 mr-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+              AI Calls: {currentSession.aiCallCount} / 4
+            </div>
+          )}
           <button
             onClick={() => generateMutation.mutate(true)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+            disabled={isGenerating}
+            className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+              isGenerating 
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800/50 dark:text-slate-600'
+                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700'
+            }`}
           >
-            <RefreshCw className="w-4 h-4" />
-            Regenerate
+            <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Regenerating...' : 'Regenerate'}
           </button>
           <button
             onClick={() => setSelectedResumeId(null)}
@@ -481,6 +542,30 @@ export default function TailoringDashboard() {
           Preview Tailored Resume ({acceptedCount} accepted)
         </button>
       </div>
+
+      {isGenerating && (
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl p-6 shadow-sm mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+            <div>
+              <h3 className="font-bold text-indigo-900 dark:text-indigo-300">Regenerating Resume...</h3>
+              <p className="text-sm text-indigo-700 dark:text-indigo-400">
+                {currentSession?.generationStatus === 'analyzing_jd' && 'Analyzing Job Description...'}
+                {currentSession?.generationStatus === 'extracting_profile' && 'Building Candidate Profile...'}
+                {currentSession?.generationStatus === 'gap_analysis' && 'Performing Gap Analysis...'}
+                {currentSession?.generationStatus === 'generating_resume' && 'Generating Tailored Resume...'}
+                {currentSession?.generationStatus === 'validating' && 'Validating Resume...'}
+                {currentSession?.generationStatus === 'comparing_diff' && 'Comparing With Original...'}
+                {currentSession?.generationStatus === 'preparing_suggestions' && 'Preparing Suggestions...'}
+                {!currentSession?.generationStatus && 'Warming up AI Engine...'}
+              </p>
+            </div>
+          </div>
+          <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider bg-white dark:bg-indigo-950 px-3 py-1.5 rounded-full shadow-sm">
+            Please Wait
+          </div>
+        </div>
+      )}
 
       {activeTab === 'suggestions' && (
         <>
@@ -512,21 +597,36 @@ export default function TailoringDashboard() {
               <div className="flex gap-2">
                 <button
                   onClick={() => batchStatusMutation.mutate({ status: 'accepted' })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800/50 rounded-lg text-xs font-semibold hover:bg-green-100 transition-colors"
+                  disabled={batchStatusMutation.isLoading || batchStatusMutation.isPending}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    batchStatusMutation.isLoading || batchStatusMutation.isPending
+                      ? 'bg-green-100 text-green-400 cursor-not-allowed dark:bg-green-900/30'
+                      : 'bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-800/50 hover:bg-green-100'
+                  }`}
                 >
                   <CheckCheck className="w-3.5 h-3.5" /> Accept All
                 </button>
                 <button
                   onClick={() => batchStatusMutation.mutate({ status: 'rejected' })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors"
+                  disabled={batchStatusMutation.isLoading || batchStatusMutation.isPending}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    batchStatusMutation.isLoading || batchStatusMutation.isPending
+                      ? 'bg-red-100 text-red-400 cursor-not-allowed dark:bg-red-900/30'
+                      : 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 hover:bg-red-100'
+                  }`}
                 >
                   <XCircle className="w-3.5 h-3.5" /> Reject All
                 </button>
                 <button
                   onClick={() => batchStatusMutation.mutate({ status: 'pending' })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors"
+                  disabled={batchStatusMutation.isLoading || batchStatusMutation.isPending}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    batchStatusMutation.isLoading || batchStatusMutation.isPending
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-700'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200'
+                  }`}
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> Reset
+                  <RefreshCw className="w-3.5 h-3.5" /> Reset Draft
                 </button>
               </div>
             </div>

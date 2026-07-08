@@ -30,68 +30,64 @@ export const ClassicTemplate = ({ data }) => {
     ? data.layout.sectionOrder
     : defaultOrder;
 
+  const compressionLevel = data.metadata?.compressionLevel || 0;
+  const isCompressed = compressionLevel >= 1;
+
   return (
     <div
-      className="bg-white print:shadow-none mx-auto px-[15mm] py-[12mm] print:py-0"
+      className={`bg-white print:shadow-none mx-auto px-[15mm] print:py-0 ${isCompressed ? 'py-[8mm]' : 'py-[12mm]'}`}
       style={{
         width: '210mm',
         boxSizing: 'border-box',
         fontFamily: '"Arial", "Helvetica", sans-serif',
         fontSize: '9pt',
         color: '#1e293b',
-        lineHeight: '1.4',
+        lineHeight: isCompressed ? '1.3' : '1.4',
       }}
     >
+      {/* ── Compression Styles ── */}
+      {isCompressed && (
+        <style>{`
+          div[style*="marginBottom: 10px"] { margin-bottom: 6px !important; }
+          div[style*="marginBottom: 7px"] { margin-bottom: 4px !important; }
+          h2 { margin-bottom: 2px !important; padding-bottom: 2px !important; }
+        `}</style>
+      )}
+
       {/* ── Header ── */}
       <Header data={data.candidate} />
 
       {/* ── Sections ── */}
       {sectionOrder.map((key) => {
+        let element = null;
         switch (key) {
           case 'summary':
-            return data.professionalSummary?.value
-              ? <Summary key="summary" data={data.professionalSummary} />
-              : null;
-
+            if (data.professionalSummary?.value) element = <Summary key="summary" data={data.professionalSummary} />;
+            break;
           case 'experience':
-            return data.experience?.length > 0
-              ? <Experience key="experience" data={data.experience} />
-              : null;
-
+            if (data.experience?.length > 0) element = <Experience key="experience" data={data.experience} />;
+            break;
           case 'education':
-            return data.education?.length > 0
-              ? <Education key="education" data={data.education} />
-              : null;
-
+            if (data.education?.length > 0) element = <Education key="education" data={data.education} />;
+            break;
           case 'projects':
-            return data.projects?.length > 0
-              ? <Projects key="projects" data={data.projects} />
-              : null;
-
+            if (data.projects?.length > 0) element = <Projects key="projects" data={data.projects} />;
+            break;
           case 'skills':
-            return data.skills &&
-              Object.values(data.skills).some((arr) => arr?.length > 0)
-              ? <Skills key="skills" data={data.skills} />
-              : null;
-
+            if (data.skills && Object.values(data.skills).some((arr) => arr?.length > 0)) element = <Skills key="skills" data={data.skills} />;
+            break;
           case 'certifications':
-            return data.certifications?.length > 0
-              ? <Certifications key="certifications" data={data.certifications} />
-              : null;
-
+            if (data.certifications?.length > 0) element = <Certifications key="certifications" data={data.certifications} />;
+            break;
           case 'achievements':
-            return data.achievements?.length > 0
-              ? <Achievements key="achievements" data={data.achievements} sectionTitle="Achievements" />
-              : null;
-
+            if (data.achievements?.length > 0) element = <Achievements key="achievements" data={data.achievements} sectionTitle="Achievements" />;
+            break;
           case 'leadership':
-            return data.leadership?.length > 0
-              ? <Achievements key="leadership" data={data.leadership} sectionTitle="Leadership & Activities" />
-              : null;
-
-          default:
-            return null;
+            if (data.leadership?.length > 0) element = <Achievements key="leadership" data={data.leadership} sectionTitle="Leadership & Activities" />;
+            break;
         }
+        
+        return element ? <div key={key} data-section={key}>{element}</div> : null;
       })}
     </div>
   );

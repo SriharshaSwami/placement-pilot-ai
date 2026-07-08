@@ -44,28 +44,7 @@ const ResumePreview = () => {
     return () => observer.disconnect();
   }, [isAutoFit, activeSidebarTab]);
 
-  // Handle pinch-to-zoom on trackpads
-  useEffect(() => {
-    const container = previewContainerRef.current;
-    if (!container) return;
 
-    const handleWheel = (e) => {
-      // ctrlKey is true for pinch-to-zoom gestures on trackpads
-      if (e.ctrlKey) {
-        e.preventDefault();
-        setIsAutoFit(false);
-        setZoom(z => {
-          // Adjust sensitivity
-          const newZoom = z - (e.deltaY * 0.01);
-          // Clamp between 20% and 250%
-          return Math.min(Math.max(0.2, newZoom), 2.5);
-        });
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
-  }, []);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['resume', id],
@@ -244,6 +223,29 @@ const ResumePreview = () => {
       initialStructuredData.candidate?.email?.value ||
       initialStructuredData.experience?.length > 0 ||
       initialStructuredData.education?.length > 0);
+
+  // Handle pinch-to-zoom on trackpads
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e) => {
+      // ctrlKey is true for pinch-to-zoom gestures on trackpads
+      if (e.ctrlKey) {
+        e.preventDefault();
+        setIsAutoFit(false);
+        setZoom(z => {
+          // Adjust sensitivity
+          const newZoom = z - (e.deltaY * 0.01);
+          // Clamp between 20% and 250%
+          return Math.min(Math.max(0.2, newZoom), 2.5);
+        });
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [isLoading, hasValidData, activeSidebarTab]);
 
   if (isLoading) return <LoadingSkeleton className="h-screen w-full" />;
   if (isError) return <ErrorState message={error?.message} onRetry={refetch} />;

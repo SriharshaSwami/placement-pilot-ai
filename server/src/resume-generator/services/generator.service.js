@@ -44,6 +44,9 @@ class GeneratorService {
       }
     } catch (error) {
       console.error(`[GeneratorService] Generation failed: ${error.message}`);
+      if (error.message.includes('Render Validation Failed')) {
+        throw new CustomError(error.message, 400, 'VALIDATION_FAILED');
+      }
       throw new CustomError('Failed to generate resume', 500, 'GENERATION_FAILED');
     }
   }

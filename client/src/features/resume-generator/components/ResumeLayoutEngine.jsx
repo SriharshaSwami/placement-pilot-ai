@@ -44,6 +44,9 @@ export const ResumeLayoutEngine = ({ structuredData, templateId, onOverflowChang
           boxSizing: 'border-box',
           position: 'relative',
           margin: '0 auto',
+          colorScheme: 'light',
+          forcedColorAdjust: 'none',
+          WebkitPrintColorAdjust: 'exact',
         }}
       >
         <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -52,9 +55,9 @@ export const ResumeLayoutEngine = ({ structuredData, templateId, onOverflowChang
       </div>
 
       {/* ── Invisible measurement twin — no overflow constraint ── */}
-      {onOverflowChange && (
-        <div
-          ref={measureRef}
+      <div
+        id="resume-measurement-twin"
+        ref={measureRef}
           aria-hidden="true"
           style={{
             position: 'absolute',
@@ -68,7 +71,6 @@ export const ResumeLayoutEngine = ({ structuredData, templateId, onOverflowChang
         >
           <ResumeTemplateEngine structuredData={structuredData} templateId={templateId} />
         </div>
-      )}
     </>
   );
 };

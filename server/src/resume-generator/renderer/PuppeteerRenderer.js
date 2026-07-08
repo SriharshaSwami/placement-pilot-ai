@@ -48,6 +48,35 @@ export class PuppeteerRenderer extends ResumeRenderer {
       // Buffer for fonts/styles to fully settle
       await new Promise(r => setTimeout(r, 800));
 
+      // --- RENDERER VALIDATION STEP ---
+      const validationReport = await page.evaluate((a4Height) => {
+        const twin = document.getElementById('resume-measurement-twin');
+        if (!twin) return { isValid: false, reason: 'Measurement twin not found. Cannot validate layout.' };
+
+        const totalHeight = twin.scrollHeight;
+        
+        // 1. Check Overflow
+        if (totalHeight > a4Height) {
+          return { isValid: false, reason: `Layout overflows A4 page height (${totalHeight}px > ${a4Height}px).` };
+        }
+
+        // 2. Check Excessive Whitespace
+        if (totalHeight < a4Height * 0.70) {
+          // The user mentioned rejecting on major whitespace imbalance, but allowed a warning option.
+          // Since the prompt says "Reject layouts where... major whitespace imbalance exists", we will reject it.
+          // Wait, the user approved the plan where I asked if it should be a warning, but they just said "approved". 
+          // Let's stick to the strict prompt: "Reject layouts where... major whitespace imbalance exists".
+          return { isValid: false, reason: `Excessive whitespace detected. Resume only fills ${Math.round((totalHeight/a4Height)*100)}% of the page.` };
+        }
+
+        return { isValid: true };
+      }, A4_HEIGHT_PX);
+
+      if (!validationReport.isValid) {
+        throw new Error(`Render Validation Failed: ${validationReport.reason}`);
+      }
+      // ---------------------------------
+
       const pdfBuffer = await page.pdf({
         // Use explicit pixel dimensions — do NOT use format:'A4' together with
         // preferCSSPageSize as they can conflict. We own the dimensions here.

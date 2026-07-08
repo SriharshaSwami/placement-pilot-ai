@@ -1,7 +1,7 @@
 import React from 'react';
 import { EditableNode } from '../../components/editor/EditableNode.jsx';
 import { SectionHeading } from './Header.jsx';
-import { Join, Show } from '../../components/Layout/Conditional.jsx';
+import { Join, Show, isPresent } from '../../components/Layout/Conditional.jsx';
 
 const font = '"Arial", "Helvetica", sans-serif';
 
@@ -46,7 +46,7 @@ export const Education = ({ data }) => {
             </span>
             <Show when={edu.cgpa?.value || edu.percentage?.value}>
               <span style={{ fontFamily: font, fontSize: '8.5pt', color: '#475569', whiteSpace: 'nowrap', marginLeft: '8px' }}>
-                CGPA: <EditableNode path={`education.${index}.cgpa`} value={edu.cgpa?.value || edu.percentage?.value} placeholder="CGPA" tag="span" />
+                {isPresent(edu.cgpa?.value || edu.percentage?.value) ? 'CGPA: ' : ''}<EditableNode path={`education.${index}.cgpa`} value={edu.cgpa?.value || edu.percentage?.value} placeholder="Add CGPA" tag="span" />
               </span>
             </Show>
           </div>

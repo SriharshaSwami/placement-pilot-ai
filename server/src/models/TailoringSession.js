@@ -6,6 +6,7 @@ const suggestionSchema = new mongoose.Schema({
   priority: { type: String, enum: ['High', 'Medium', 'Low'], required: true },
   confidence: { type: Number, required: true },
   reason: { type: String, required: true },
+  targetPath: { type: String, required: true },
   originalContent: { type: String, default: '' },
   suggestedContent: { type: String, required: true },
   status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
@@ -31,7 +32,23 @@ const tailoringSessionSchema = new mongoose.Schema({
   promptVersion: { type: String, required: true },
   modelVersion: { type: String, required: true },
   
-  matchAnalysis: {
+  // Pipeline Stages
+  generationStatus: { 
+    type: String, 
+    enum: ['analyzing_jd', 'extracting_profile', 'gap_analysis', 'generating_resume', 'measuring_fit', 'emergency_compression', 'validating', 'comparing_diff', 'preparing_suggestions', 'completed', 'failed'],
+    default: 'analyzing_jd'
+  },
+  
+  jdAnalysis: { type: mongoose.Schema.Types.Mixed },
+  gapAnalysis: { type: mongoose.Schema.Types.Mixed },
+  resumeStrategy: { type: mongoose.Schema.Types.Mixed },
+  tailoredStructuredResume: { type: mongoose.Schema.Types.Mixed },
+  validationScores: { type: mongoose.Schema.Types.Mixed },
+  fitReport: { type: mongoose.Schema.Types.Mixed },
+  qualityReport: { type: mongoose.Schema.Types.Mixed },
+  aiCallCount: { type: Number, default: 0 },
+
+  matchAnalysis: { // Keeping for backwards compatibility or gapAnalysis mappings
     overallMatchPercent: Number,
     matchedSkills: [String],
     missingSkills: [String],

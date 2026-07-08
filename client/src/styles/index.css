@@ -12,11 +12,25 @@
   }
 
   ::selection {
-    @apply bg-blue-500 text-white;
+    background-color: #3b82f6 !important; /* blue-500 */
+    color: #ffffff !important;
+  }
+
+  ::-moz-selection {
+    background-color: #3b82f6 !important;
+    color: #ffffff !important;
   }
 
   body.dark ::selection {
-    @apply bg-blue-500 text-white;
+    background-color: #3b82f6 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+
+  body.dark ::-moz-selection {
+    background-color: #3b82f6 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
   }
 }
 

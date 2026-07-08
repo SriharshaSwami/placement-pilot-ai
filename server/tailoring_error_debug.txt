@@ -1,0 +1,8 @@
+Error: Gemini API Error: {"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}
+    at GeminiClient.generateStructuredJSON (file:///C:/Users/sriha/OneDrive/Desktop/Projects/placement-assistance-ai/server/src/ai/adapters/gemini.client.js:69:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///C:/Users/sriha/OneDrive/Desktop/Projects/placement-assistance-ai/server/src/ai/adapters/gemini.adapter.js:146:16
+    at async AiRequestManager._executeWithRetry (file:///C:/Users/sriha/OneDrive/Desktop/Projects/placement-assistance-ai/server/src/ai/adapters/gemini.adapter.js:44:24)
+    at async file:///C:/Users/sriha/OneDrive/Desktop/Projects/placement-assistance-ai/server/src/ai/adapters/gemini.adapter.js:145:22
+    at async file:///C:/Users/sriha/OneDrive/Desktop/Projects/placement-assistance-ai/server/src/ai/adapters/gemini.adapter.js:172:14
+    at async TailoringService._runTailoringPipeline (file:///C:/Users/sriha/OneDrive/Desktop/Projects/placement-assistance-ai/server/src/services/tailoring.service.js:150:25)

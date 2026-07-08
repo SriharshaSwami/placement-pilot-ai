@@ -24,45 +24,14 @@ class TailoringService {
   }
 
   async generateTailoringSession(userId, jobId, resumeId, forceRegenerate = false) {
-    console.log(`[TailoringService] generateTailoringSession called for Job: ${jobId}, Resume: ${resumeId}, ForceRegenerate: ${forceRegenerate}`);
+    console.log(`[TailoringService] generateTailoringSession called for Job: ${jobId}, Resume: ${resumeId}`);
     // 1. Verify ownership
     const resume = await resumeRepository.findById(resumeId);
-    console.log(`[TailoringService] Fetched resume: ${resume ? resume.title : 'NOT FOUND'}`);
     if (!resume || resume.userId.toString() !== userId.toString()) {
       throw new CustomError('Resume not found', 404, 'NOT_FOUND');
     }
-    if (!resume.parsedData) {
+    if (!resume.parsedData || resume.parsedData?.metadata?.parsingStatus !== 'success') {
       throw new CustomError('Resume must be parsed first', 400, 'NOT_PARSED');
-    }
-
-    if (resume.parsedData?.metadata?.parsingStatus !== 'success') {
-      throw new CustomError('Resume parsing was not successful. Please re-parse the resume.', 400, 'NOT_PARSED');
-    }
-
-    const sections = resume.parsedData?.sections;
-    let hasContent = false;
-    if (sections) {
-      // Handle both Mongoose Map and standard Object
-      const values = typeof sections.values === 'function' ? Array.from(sections.values()) : Object.values(sections);
-      hasContent = values.some(text => typeof text === 'string' && text.trim().length > 0);
-    }
-    
-    if (!hasContent) {
-       throw new CustomError('Resume is empty or contains no parsed sections.', 400, 'EMPTY_RESUME');
-    }
-
-    console.log(`[TailoringService] Validating structuredData...`);
-    const isStructuredPopulated = this.hasStructuredContent(resume.parsedData.structuredData);
-    if (!isStructuredPopulated) {
-      console.log(`[TailoringService] structuredData is an empty shell. Attempting to parse...`);
-      const resumeParserService = (await import('./parser/resumeParser.service.js')).default;
-      resume.parsedData = await resumeParserService.createStructuredResume(resumeId);
-      
-      if (!this.hasStructuredContent(resume.parsedData.structuredData)) {
-         throw new CustomError('Failed to extract structured data from resume.', 400, 'EMPTY_RESUME');
-      }
-    } else {
-      console.log(`[TailoringService] structuredData is valid and populated.`);
     }
 
     const job = await jobRepository.findById(jobId);
@@ -70,155 +39,258 @@ class TailoringService {
       throw new CustomError('Job not found', 404, 'NOT_FOUND');
     }
 
-    // 2. Check cache (active session)
+    // 2. Caching check: ONLY cache deterministic intermediate artifacts.
+    // If a session exists and has completed suggestions for this exact Job and Resume, return it.
     if (!forceRegenerate) {
       const existingSession = await TailoringSession.findOne({ userId, jobId, resumeId });
       if (existingSession) {
-        console.log(`[TailoringService] Returning cached session: ${existingSession._id}`);
+        // Return it whether active, completed, or failed.
+        // The UI handles 'failed' by showing an error and allowing forceRegenerate=true.
         return existingSession;
       }
-    } else {
-      console.log(`[TailoringService] forceRegenerate is true. Deleting existing session...`);
-      await TailoringSession.findOneAndDelete({ userId, jobId, resumeId });
     }
-
-    // Optional: Calculate embedding similarity
-    let similarityScore = null;
-    if (resume.embedding && job.embedding) {
-      try {
-        const embeddingService = (await import('./embedding.service.js')).default;
-        similarityScore = embeddingService.calculateSimilarity(resume.embedding, job.embedding);
-      } catch (err) {
-        console.error('[TailoringService] Failed to calculate similarity:', err.message);
-      }
-    }
-
-    // 3. Build AI Prompt
-    const promptBuilder = buildTailoringPrompt(resume.parsedData, job);
     
-    // Inject similarity context if available
-    let systemInstruction = promptBuilder.getSystemInstruction();
-    if (similarityScore !== null) {
-      systemInstruction += `\n\nContext: The semantic similarity score between this resume and job description is ${(similarityScore * 100).toFixed(1)}%. Use this as an indicator of how much tailoring is needed (lower score = more aggressive tailoring required).`;
-    }
+    // Clear old session
+    await TailoringSession.findOneAndDelete({ userId, jobId, resumeId });
 
-    const promptContent = promptBuilder.buildContent();
-    console.log(`[TailoringService] Final Prompt Payload Length: ${promptContent.length} chars`);
-    console.log(`[TailoringService] Prompt Payload Preview: ${promptContent.substring(0, 200)}...`);
-
-    let parsedJSON;
-    let attempts = 0;
-    const maxAttempts = 2;
-
-    while (attempts < maxAttempts) {
-      try {
-        attempts++;
-        // 4. Call AI Adapter
-        const response = await geminiAdapter.generateStructuredJSON(
-          promptContent,
-          resumeTailoringSchema,
-          systemInstruction
-        );
-        parsedJSON = response.parsedJSON;
-
-        // 5. Validate Output
-        validateSchema(parsedJSON, resumeTailoringSchema.required);
-
-        // Calibrate confidence scores
-        if (parsedJSON.suggestions && Array.isArray(parsedJSON.suggestions)) {
-          const missingKeywords = parsedJSON.matchAnalysis?.missingKeywords || [];
-          parsedJSON.suggestions.forEach(sug => {
-            let conf = sug.confidence || 85;
-            
-            // Adjust based on priority
-            if (sug.priority === 'High') conf += 5;
-            if (sug.priority === 'Low') conf -= 10;
-
-            // Adjust based on edit type size (Not using originalContent anymore)
-            const sugWords = (sug.suggestedContent || '').split(/\s+/).filter(Boolean).length;
-            if (sugWords > 0 && sugWords < 5) {
-              // Very small minor wording improvement
-              conf -= 15;
-            }
-
-            // Adjust based on missing keywords inclusion
-            const containsMissingKeyword = missingKeywords.some(kw => 
-              sug.suggestedContent.toLowerCase().includes(kw.toLowerCase())
-            );
-            if (containsMissingKeyword) {
-              conf += 10;
-            }
-
-            // Clamp confidence between 50 and 98 to make it look realistic and not generic
-            sug.confidence = Math.max(50, Math.min(98, Math.round(conf)));
-
-            // Populate originalContent deterministically using targetPath
-            if (!sug.originalContent && resume.parsedData?.structuredData) {
-              try {
-                const targetPath = sug.targetPath;
-                if (targetPath) {
-                  const val = targetPath.split('.').reduce((acc, part) => acc && acc[part], resume.parsedData.structuredData);
-                  
-                  if (Array.isArray(val)) {
-                    sug.originalContent = val.map(v => typeof v === 'object' ? v.value || '' : v).join(', ');
-                  } else if (val && typeof val === 'object' && val.value) {
-                    sug.originalContent = val.value;
-                  } else if (typeof val === 'string') {
-                    sug.originalContent = val;
-                  } else {
-                    sug.originalContent = '';
-                  }
-                }
-              } catch (e) {
-                sug.originalContent = '';
-              }
-            }
-
-            // Fix suggestedContent if AI returned a stringified JSON array
-            if (sug.suggestedContent && sug.suggestedContent.trim().startsWith('[')) {
-              try {
-                const parsedSug = JSON.parse(sug.suggestedContent);
-                if (Array.isArray(parsedSug)) {
-                  sug.suggestedContent = parsedSug.map(v => typeof v === 'object' ? v.value || '' : v).join(', ');
-                }
-              } catch (e) {
-                // Ignore parse errors, it's just a regular string that happens to start with [
-              }
-            }
-          });
-        }
-        break;
-      } catch (error) {
-        console.warn(`[TailoringService] Attempt ${attempts} failed: ${error.message}`);
-        if (attempts >= maxAttempts) {
-          // Parse the raw error to give a clean message to the client
-          const raw = error.message || '';
-          let clientMsg;
-          if (raw.includes('503') || raw.toLowerCase().includes('unavailable') || raw.toLowerCase().includes('high demand')) {
-            clientMsg = 'The AI service is temporarily overloaded. Please try again in a few moments.';
-          } else if (raw.toLowerCase().includes('timeout')) {
-            clientMsg = 'The AI request timed out. Please try again.';
-          } else {
-            clientMsg = `Failed to generate tailoring suggestions after ${maxAttempts} attempts. Please try again.`;
-          }
-          throw new CustomError(clientMsg, 503, 'AI_UNAVAILABLE');
-        }
-      }
-    }
-
-    // 6. Save DB
-    const newSession = new TailoringSession({
+    // Initialize session with Analyzing JD status
+    const session = new TailoringSession({
       userId,
       jobId,
       resumeId,
-      promptVersion: '1.0.0',
+      promptVersion: '2.0.0',
       modelVersion: geminiAdapter.modelName,
-      matchAnalysis: parsedJSON.matchAnalysis,
-      suggestions: parsedJSON.suggestions,
+      generationStatus: 'analyzing_jd',
       status: 'active'
     });
+    await session.save();
 
-    return newSession.save();
+    // Fire-and-forget the rest of the pipeline to run asynchronously.
+    // We catch errors inside to update the generationStatus to 'failed'.
+    this._runTailoringPipeline(session, resume, job).catch(err => {
+      console.error('[TailoringService] Pipeline failed:', err);
+      require('fs').writeFileSync('C:\\Users\\sriha\\OneDrive\\Desktop\\Projects\\placement-assistance-ai\\server\\tailoring-error.log', String(err.stack || err));
+      session.generationStatus = 'failed';
+      session.save().catch(e => console.error('Failed to save error state', e));
+    });
+
+    // Return the session immediately so the client can start polling/subscribing
+    return session;
+  }
+
+  async _runTailoringPipeline(session, resume, job) {
+    try {
+      // Lazy imports for new prompts/schemas to avoid circular dependencies
+      const { buildJDAnalysisPrompt } = await import('../ai/prompts/resume/jdAnalysis.prompt.js');
+      const { jdAnalysisSchema } = await import('../ai/schemas/jdAnalysis.schema.js');
+      const { buildGapAnalysisPrompt } = await import('../ai/prompts/resume/gapAnalysis.prompt.js');
+      const { gapAnalysisSchema } = await import('../ai/schemas/gapAnalysis.schema.js');
+      const { buildTailorGenerationPrompt } = await import('../ai/prompts/resume/tailorGeneration.prompt.js');
+      const { tailoredResumeSchema } = await import('../ai/schemas/tailoredResume.schema.js');
+      const resumeDiffService = (await import('./resumeDiff.service.js')).default;
+
+      // Stage 1: JD Analysis
+      session.generationStatus = 'analyzing_jd';
+      await session.save();
+      
+      const jdPrompt = buildJDAnalysisPrompt(job);
+      // JD Analysis AI Call
+      session.aiCallCount = (session.aiCallCount || 0) + 1;
+      const jdRes = await geminiAdapter.generateStructuredJSON(
+        jdPrompt.buildContent(),
+        jdAnalysisSchema,
+        jdPrompt.getSystemInstruction()
+      );
+      session.jdAnalysis = jdRes.parsedJSON;
+
+      // Stage 2: Gap Analysis & Strategy
+      session.generationStatus = 'gap_analysis';
+      await session.save();
+      
+      const gapPrompt = buildGapAnalysisPrompt(resume.parsedData, session.jdAnalysis);
+      // Gap Analysis AI Call
+      session.aiCallCount += 1;
+      const gapRes = await geminiAdapter.generateStructuredJSON(
+        gapPrompt.buildContent(),
+        gapAnalysisSchema,
+        gapPrompt.getSystemInstruction()
+      );
+      session.gapAnalysis = gapRes.parsedJSON;
+      session.resumeStrategy = session.gapAnalysis.strategy;
+
+      // Map to backwards-compatible matchAnalysis
+      session.matchAnalysis = {
+        overallMatchPercent: session.gapAnalysis.strongMatches?.length > 0 ? 80 : 50,
+        matchedSkills: session.gapAnalysis.strongMatches || [],
+        missingSkills: session.gapAnalysis.missingKeywords || [],
+        matchedKeywords: session.gapAnalysis.strongMatches || [],
+        missingKeywords: session.gapAnalysis.missingKeywords || [],
+        resumeWeaknesses: session.gapAnalysis.missingEmphasis || []
+      };
+
+      // Stage 3: Generate Tailored Resume
+      session.generationStatus = 'generating_resume';
+      await session.save();
+      
+      const templateId = resume.selectedTemplate || 'classic';
+      const { resumeRules } = await import('../config/resumeRules.js');
+      const activeRules = resumeRules[templateId] || resumeRules.classic;
+      
+      // Compute budget based on template rules
+      const contentBudget = {
+        summary: `maximum ${activeRules.summary.maxLines} rendered lines`,
+        experience: `maximum ${activeRules.experience.currentRoleMaxBullets * 3} bullets total`, // Approximation for total
+        projects: `maximum ${activeRules.projects.totalMaxBullets} bullets total`,
+        achievements: `maximum ${activeRules.achievements.totalMaxBullets} bullets`,
+        skills: `maximum ${activeRules.skills.maxRows} rows`
+      };
+
+      const tailorPrompt = buildTailorGenerationPrompt(resume.parsedData, session.jdAnalysis, session.gapAnalysis, contentBudget);
+      // Tailoring AI Call
+      session.aiCallCount += 1;
+      const tailorRes = await geminiAdapter.generateStructuredJSON(
+        tailorPrompt.buildContent(),
+        tailoredResumeSchema,
+        tailorPrompt.getSystemInstruction()
+      );
+      session.tailoredStructuredResume = tailorRes.parsedJSON.tailoredStructuredData;
+      session.validationScores = tailorRes.parsedJSON.validationScores;
+
+      // Stage 3.5: Measure Fit & Compress
+      session.generationStatus = 'measuring_fit';
+      await session.save();
+      
+      const resumeFitService = (await import('./resumeFit.service.js')).default;
+      const resumeCompressionService = (await import('./resumeCompression.service.js')).default;
+      
+      let currentData = session.tailoredStructuredResume;
+      let fitReport = null;
+
+      for (let level = 0; level <= 5; level++) {
+        if (level > 0) {
+          console.log(`[TailoringService] Resume overflows by ${fitReport.overflowPixels}px. Applying Compression Level ${level}...`);
+          currentData = resumeCompressionService.compress(session.tailoredStructuredResume, level);
+        }
+
+        fitReport = await resumeFitService.evaluateFit(
+          currentData, 
+          resume.selectedTemplate || 'classic'
+        );
+
+        if (fitReport.fits) {
+          console.log(`[TailoringService] Fit achieved at Level ${level}.`);
+          break;
+        }
+      }
+
+      session.tailoredStructuredResume = currentData;
+      session.fitReport = fitReport;
+      if (fitReport.fits === false) {
+        console.warn(`[TailoringService] Warning: Resume still overflows after Level 5 compression. Triggering Emergency AI Compression...`);
+        session.generationStatus = 'emergency_compression';
+        await session.save();
+
+        try {
+          const { buildEmergencyCompressionPrompt } = await import('../ai/prompts/resume/emergencyCompression.prompt.js');
+          const { emergencyCompressionSchema } = await import('../ai/schemas/emergencyCompression.schema.js');
+
+          if (session.aiCallCount >= 4) {
+            throw new Error('Maximum AI call limit (4) exceeded. Cannot perform Emergency Compression.');
+          }
+
+          // Emergency Compression AI Call
+          session.aiCallCount += 1;
+          const emergencyPrompt = buildEmergencyCompressionPrompt(currentData, fitReport.overflowPixels, fitReport.overflowSections);
+          const emergencyRes = await geminiAdapter.generateStructuredJSON(
+            emergencyPrompt.buildContent(),
+            emergencyCompressionSchema,
+            emergencyPrompt.getSystemInstruction()
+          );
+
+          const modifiedSections = emergencyRes.parsedJSON.modifiedSections || {};
+          
+          // Merge modified sections back into currentData
+          Object.keys(modifiedSections).forEach(sectionKey => {
+            const updates = modifiedSections[sectionKey];
+            if (currentData[sectionKey]) {
+              if (Array.isArray(updates)) {
+                // It's an array of objects (like experience/projects) with an index
+                updates.forEach(update => {
+                  if (update.index !== undefined && currentData[sectionKey][update.index]) {
+                    if (update.description && Array.isArray(update.description)) {
+                      currentData[sectionKey][update.index].description.value = update.description.map(v => ({ value: v, confidence: 1 }));
+                    }
+                  }
+                });
+              } else if (updates.value && !Array.isArray(currentData[sectionKey])) {
+                // It's a single object (like professionalSummary)
+                currentData[sectionKey].value = updates.value;
+              }
+            }
+          });
+
+          session.tailoredStructuredResume = currentData;
+          
+          // Final fit measurement (optional but good to have truth)
+          fitReport = await resumeFitService.evaluateFit(
+            currentData, 
+            resume.selectedTemplate || 'classic'
+          );
+          session.fitReport = fitReport;
+          console.log(`[TailoringService] Emergency Compression finished. Fits: ${fitReport.fits}`);
+
+        } catch (emergencyError) {
+          console.error(`[TailoringService] Emergency Compression failed:`, emergencyError);
+          // Fall back to the deterministically compressed data
+        }
+      }
+
+      // Stage 3.75: Deterministic Resume Quality Evaluation
+      session.generationStatus = 'validating';
+      await session.save();
+
+      const resumeQualityService = (await import('./resumeQuality.service.js')).default;
+      const qualityReport = resumeQualityService.evaluate(
+        session.tailoredStructuredResume, 
+        session.jdAnalysis, 
+        session.fitReport,
+        resume.selectedTemplate || 'classic'
+      );
+      session.qualityReport = qualityReport;
+      
+      if (qualityReport.warnings && qualityReport.warnings.length > 0) {
+        console.warn(`[TailoringService] Resume Validation Warnings:`, qualityReport.warnings);
+      }
+
+      // Stage 4: Semantic Diff & Preparing Suggestions
+      session.generationStatus = 'comparing_diff';
+      await session.save();
+      
+      const suggestions = resumeDiffService.generateSemanticDiff(
+        resume.parsedData.structuredData, 
+        session.tailoredStructuredResume
+      );
+      session.suggestions = suggestions;
+      session.semanticDiff = suggestions;
+
+      // Stage 5: Completed
+      session.generationStatus = 'completed';
+      session.status = 'completed';
+      await session.save();
+
+    } catch (error) {
+      console.error('[TailoringService] Error during pipeline execution:', error);
+      try {
+        const fs = await import('fs');
+        fs.writeFileSync('tailoring_error_debug.txt', error.stack || error.message);
+      } catch (e) {}
+      session.generationStatus = 'failed';
+      try {
+        await session.save();
+      } catch (saveError) {
+        console.error('[TailoringService] Failed to save error state to session:', saveError);
+      }
+    }
   }
 
   async generateTargetedSuggestion(userId, sessionId, targetSkill) {
@@ -346,11 +418,48 @@ class TailoringService {
 
       if (validPath) {
         const lastKey = keys[keys.length - 1];
+        
+        // SPECIAL CASE: Reorder projects
+        if (sug.targetPath === 'projects') {
+            const newTitles = sug.suggestedContent.split('\n').map(t => t.trim()).filter(Boolean);
+            const oldProjects = current[lastKey] || [];
+            const newProjects = [];
+            for (const title of newTitles) {
+                const p = oldProjects.find(op => (op.title?.value || op.title) === title);
+                if (p) newProjects.push(p);
+            }
+            if (newProjects.length > 0) {
+               current[lastKey] = newProjects;
+               changedSections.add(keys[0]);
+            }
+            continue;
+        }
+        
+        // SPECIAL CASE: Achievements
+        if (sug.targetPath === 'achievements') {
+            const newDescriptions = sug.suggestedContent.split('\n').map(d => d.trim()).filter(Boolean);
+            const newAchievements = [];
+            for (let i = 0; i < newDescriptions.length; i++) {
+                const oldAch = (current[lastKey] && current[lastKey][i]) || {};
+                newAchievements.push({
+                   title: oldAch.title || { value: `Achievement ${i+1}`, confidence: 1 },
+                   description: { value: newDescriptions[i], confidence: 1 }
+                });
+            }
+            current[lastKey] = newAchievements;
+            changedSections.add(keys[0]);
+            continue;
+        }
+
         if (current[lastKey] !== undefined) {
-          if (typeof current[lastKey] === 'object' && current[lastKey] !== null && 'value' in current[lastKey]) {
+          if (Array.isArray(current[lastKey])) {
+              const separator = keys[0] === 'skills' ? ',' : '\n';
+              const items = sug.suggestedContent.split(separator).map(s => s.trim()).filter(Boolean);
+              current[lastKey] = items.map(val => ({ value: val, confidence: 1 }));
+          } else if (typeof current[lastKey] === 'object' && current[lastKey] !== null && 'value' in current[lastKey]) {
             current[lastKey].value = sug.suggestedContent;
           } else {
-            current[lastKey] = sug.suggestedContent;
+            current[lastKey] = { value: sug.suggestedContent, confidence: 1 };
           }
           changedSections.add(keys[0]);
         }

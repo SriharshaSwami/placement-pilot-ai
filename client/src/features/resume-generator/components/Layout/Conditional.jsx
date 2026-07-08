@@ -6,7 +6,10 @@ import { useEditorContext } from '../../contexts/EditorContext.jsx';
  */
 export const isPresent = (val) => {
   if (val === null || val === undefined) return false;
-  if (typeof val === 'string' && val.trim() === '') return false;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '' || trimmed === 'null' || trimmed === 'undefined') return false;
+  }
   return true;
 };
 

@@ -1,13 +1,15 @@
 import crypto from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 import geminiClient from './gemini.client.js';
 import logger from '../../utils/logger.js';
 import AiCache from '../../models/AiCache.js';
 import AiLog from '../../models/AiLog.js';
 
+const recursionGuard = new AsyncLocalStorage();
+
 class AiRequestManager {
   constructor() {
     this.modelName = geminiClient.modelName;
-    // In-flight Deduplication: { [hash]: Promise }
     this.inFlightRequests = new Map();
   }
 
@@ -16,7 +18,6 @@ class AiRequestManager {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 
-  // Cost estimates based on Gemini 2.5 Flash pricing (adjust as needed)
   _calculateEstimatedCost(promptTokens, responseTokens) {
     const promptCostPer1k = 0.000075;
     const responseCostPer1k = 0.000300;
@@ -31,8 +32,7 @@ class AiRequestManager {
     }
   }
 
-  // Changed default maxRetries to 1 to fail fast unless explicitly overridden
-  async _executeWithRetry(apiCall, feature, maxRetries = 1, baseDelay = 1000) {
+  async _executeWithRetry(apiCall, feature, maxRetries = 3, baseDelay = 2000) {
     let attempt = 0;
     const startTime = Date.now();
     let lastError = null;
@@ -42,7 +42,6 @@ class AiRequestManager {
         const result = await apiCall();
         const latency = Date.now() - startTime;
         
-        // Extract usage if available
         const usage = result.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
         
         await this._logRequest({
@@ -65,7 +64,6 @@ class AiRequestManager {
         attempt++;
         lastError = error;
         
-        // Retry only on 429 or 5xx, or specific network timeouts
         const isRetryable = error.statusCode === 429 || error.statusCode >= 500 || error.code === 'AI_API_ERROR';
         
         if (!isRetryable || attempt >= maxRetries) {
@@ -92,20 +90,24 @@ class AiRequestManager {
   }
 
   async generateStructuredJSON(promptText, schema, systemInstruction = null, options = {}) {
-    const {
-      feature = 'general-json',
-      useCache = true,
-      cacheTTL = 3600, // seconds
-      maxRetries = 1 // Default to 1 (fail fast)
-    } = options;
-
-    const requestHash = this._generateHash(promptText, schema, systemInstruction, this.modelName);
-
-    // 1. Check In-Flight Deduplication (Fastest, Memory-based)
-    if (this.inFlightRequests.has(requestHash)) {
-      logger.info(`[AiRequestManager] DEDUPLICATION [${feature}] - Awaiting existing promise for hash: ${requestHash.substring(0, 8)}`);
-      return this.inFlightRequests.get(requestHash);
+    if (recursionGuard.getStore() === true) {
+      throw new Error('Recursive AI invocation detected. Blocking call.');
     }
+
+    return recursionGuard.run(true, async () => {
+      const {
+        feature = 'general-json',
+        useCache = true,
+        cacheTTL = 3600, // seconds
+        maxRetries = 3
+      } = options;
+
+      const requestHash = this._generateHash(promptText, schema, systemInstruction, this.modelName);
+
+      if (this.inFlightRequests.has(requestHash)) {
+        logger.info(`[AiRequestManager] DEDUPLICATION [${feature}] - Awaiting existing promise for hash: ${requestHash.substring(0, 8)}`);
+        return this.inFlightRequests.get(requestHash);
+      }
 
     // Wrap the entire logic in a promise to store in inFlightRequests
     const requestPromise = (async () => {
@@ -169,6 +171,7 @@ class AiRequestManager {
     } finally {
       this.inFlightRequests.delete(requestHash);
     }
+    }); // End recursionGuard.run
   }
 
   async generateContent(promptText, systemInstruction = null, model = this.modelName, feature = 'text-gen') {
